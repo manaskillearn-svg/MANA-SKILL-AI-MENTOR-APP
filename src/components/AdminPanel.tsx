@@ -1,0 +1,586 @@
+import React, { useState, useEffect } from 'react';
+import { motion } from 'motion/react';
+import { ShieldCheck, Plus, Check, X, Users, BookOpen, Wallet, LayoutDashboard, Sparkles, ArrowLeft, Play, Camera, ExternalLink } from 'lucide-react';
+import { Course, DailyTask, WithdrawalRequest, Lesson, TaskSubmission } from '../types';
+import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
+import { db } from '../firebase';
+
+interface AdminPanelProps {
+  courses: Course[];
+  tasks: DailyTask[];
+  withdrawals: WithdrawalRequest[];
+  lessons: Lesson[];
+  initialSubTab?: string;
+  initialCourseId?: string | null; // Added optional prop
+  onAddCourse: (course: Partial<Course>) => void;
+  onAddTask: (task: Partial<DailyTask>) => void;
+  onDeleteTask: (taskId: string) => void;
+  onApproveWithdrawal: (id: string) => void;
+  onRejectWithdrawal: (id: string) => void;
+  onSelectCourseForLessons: (courseId: string | null) => void;
+  onApproveTaskSubmission: (submission: TaskSubmission) => void;
+  onRejectTaskSubmission: (submissionId: string) => void;
+}
+
+export default function AdminPanel({ 
+  courses, 
+  tasks, 
+  withdrawals, 
+  lessons,
+  initialSubTab = 'stats',
+  initialCourseId = null, // Default value
+  onAddCourse, 
+  onAddTask, 
+  onDeleteTask,
+  onApproveWithdrawal, 
+  onRejectWithdrawal,
+  onSelectCourseForLessons,
+  onApproveTaskSubmission,
+  onRejectTaskSubmission
+}: AdminPanelProps) {
+  const [activeSubTab, setActiveSubTab] = useState(initialSubTab);
+  const [newCourse, setNewCourse] = useState({ title: '', description: '', price: 0, category: 'Marketing', isFree: true });
+  const [newTask, setNewTask] = useState({ title: '', description: '', reward: 5 });
+  const [editingLessonsFor, setEditingLessonsFor] = useState<string | null>(initialCourseId);
+  const [newLesson, setNewLesson] = useState({ title: '', videoUrl: '', taskDescription: '', order: 1 });
+  const [allSubmissions, setAllSubmissions] = useState<TaskSubmission[]>([]);
+
+  // Update state if initial props change
+  useEffect(() => {
+    if (initialSubTab) setActiveSubTab(initialSubTab);
+    if (initialCourseId) setEditingLessonsFor(initialCourseId);
+  }, [initialSubTab, initialCourseId]);
+
+  // Fetch all submissions for admin
+  useEffect(() => {
+    const unsub = onSnapshot(
+      query(collection(db, 'taskSubmissions'), orderBy('timestamp', 'desc')),
+      (snap) => {
+        setAllSubmissions(snap.docs.map(d => ({ id: d.id, ...d.data() } as TaskSubmission)));
+      }
+    );
+    return () => unsub();
+  }, []);
+
+  const handleSeedData = async () => {
+    // Sample Courses
+    const sampleCourses = [
+      { id: 'insta-mastery', title: 'Instagram Marketing Mastery', description: 'Learn how to grow and monetize your Instagram account from scratch.', price: 99, category: 'Marketing', isFree: false },
+      { id: 'affiliate-beg', title: 'Affiliate Marketing for Beginners', description: 'Start earning commissions by promoting products you love.', price: 0, category: 'Earning', isFree: true },
+      { id: 'digital-prod', title: 'Digital Product Creation', description: 'Create and sell your own ebooks, templates, and courses.', price: 199, category: 'Creation', isFree: false }
+    ];
+
+    for (const c of sampleCourses) {
+      const { id, ...data } = c;
+      await onAddCourse(data);
+    }
+
+    // Sample Tasks
+    const sampleTasks = [
+      { title: 'Watch 1 Lesson', description: 'Complete any one lesson from your enrolled courses.', reward: 10 },
+      { title: 'Share Referral Link', description: 'Share your referral link on WhatsApp or Instagram.', reward: 5 },
+      { title: 'Create a Reel', description: 'Create a reel about what you learned today.', reward: 20 }
+    ];
+
+    for (const t of sampleTasks) {
+      await onAddTask(t);
+    }
+
+    alert('Sample data seeded successfully!');
+  };
+
+  const handleAddLesson = () => {
+    if (!editingLessonsFor) return;
+    const event = new CustomEvent('add-lesson', { 
+      detail: { courseId: editingLessonsFor, ...newLesson } 
+    });
+    window.dispatchEvent(event);
+    setNewLesson({ title: '', videoUrl: '', taskDescription: '', order: newLesson.order + 1 });
+  };
+
+  return (
+    <div className="space-y-8">
+      <section className="flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900">Admin Control Center</h2>
+          <p className="text-slate-500">Manage your platform and users.</p>
+        </div>
+        <div className="flex items-center space-x-4">
+          <button 
+            onClick={handleSeedData}
+            className="text-xs font-bold text-slate-500 hover:text-slate-900 underline"
+          >
+            Seed Sample Data
+          </button>
+          <div className="bg-emerald-100 text-emerald-700 px-4 py-2 rounded-xl flex items-center space-x-2">
+            <ShieldCheck size={20} />
+            <span className="font-bold text-sm">Verified Admin</span>
+          </div>
+        </div>
+      </section>
+
+      {/* Admin Nav */}
+      <div className="flex space-x-2 bg-slate-100 p-1.5 rounded-2xl w-fit overflow-x-auto">
+        {[
+          { id: 'stats', label: 'Overview', icon: LayoutDashboard },
+          { id: 'courses', label: 'Courses', icon: BookOpen },
+          { id: 'tasks', label: 'Tasks', icon: Check },
+          { id: 'submissions', label: 'Submissions', icon: Camera },
+          { id: 'withdrawals', label: 'Payouts', icon: Wallet },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => {
+              setActiveSubTab(tab.id);
+              setEditingLessonsFor(null);
+            }}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${
+              activeSubTab === tab.id ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <tab.icon size={16} />
+            <span>{tab.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {activeSubTab === 'stats' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Total Users</p>
+              <p className="text-3xl font-bold text-slate-900">1,248</p>
+            </div>
+            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Active Sales</p>
+              <p className="text-3xl font-bold text-emerald-600">₹45,200</p>
+            </div>
+            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Pending Tasks</p>
+              <p className="text-3xl font-bold text-blue-600">{allSubmissions.filter(s => s.status === 'pending').length}</p>
+            </div>
+            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Pending Payouts</p>
+              <p className="text-3xl font-bold text-amber-600">{withdrawals.filter(w => w.status === 'pending').length}</p>
+            </div>
+          </div>
+
+          <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
+            <h3 className="font-bold text-slate-900 mb-6 flex items-center">
+              <Sparkles size={20} className="mr-2 text-emerald-500" />
+              Quick Actions
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <button 
+                onClick={() => setActiveSubTab('courses')}
+                className="flex flex-col items-center justify-center p-6 rounded-2xl border border-slate-100 hover:border-emerald-200 hover:bg-emerald-50 transition-all group"
+              >
+                <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                  <BookOpen size={24} />
+                </div>
+                <span className="font-bold text-sm text-slate-700">Manage Lessons</span>
+              </button>
+              <button 
+                onClick={() => setActiveSubTab('submissions')}
+                className="flex flex-col items-center justify-center p-6 rounded-2xl border border-slate-100 hover:border-emerald-200 hover:bg-emerald-50 transition-all group"
+              >
+                <div className="w-12 h-12 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                  <Camera size={24} />
+                </div>
+                <span className="font-bold text-sm text-slate-700">Review Proofs</span>
+              </button>
+              <button 
+                onClick={() => setActiveSubTab('withdrawals')}
+                className="flex flex-col items-center justify-center p-6 rounded-2xl border border-slate-100 hover:border-emerald-200 hover:bg-emerald-50 transition-all group"
+              >
+                <div className="w-12 h-12 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                  <Wallet size={24} />
+                </div>
+                <span className="font-bold text-sm text-slate-700">Review Payouts</span>
+              </button>
+              <button 
+                onClick={() => alert('User management coming soon!')}
+                className="flex flex-col items-center justify-center p-6 rounded-2xl border border-slate-100 hover:border-emerald-200 hover:bg-emerald-50 transition-all group"
+              >
+                <div className="w-12 h-12 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                  <Users size={24} />
+                </div>
+                <span className="font-bold text-sm text-slate-700">User Directory</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeSubTab === 'courses' && (
+        <div className="space-y-6">
+          {!editingLessonsFor ? (
+            <>
+              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                <h3 className="font-bold text-slate-900 mb-4 flex items-center">
+                  <Plus size={20} className="mr-2 text-emerald-500" />
+                  Add New Course
+                </h3>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <input 
+                    type="text" 
+                    placeholder="Course Title" 
+                    className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3"
+                    value={newCourse.title}
+                    onChange={e => setNewCourse({...newCourse, title: e.target.value})}
+                  />
+                  <input 
+                    type="number" 
+                    placeholder="Price (₹)" 
+                    className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3"
+                    value={isNaN(newCourse.price) ? '' : newCourse.price}
+                    onChange={e => {
+                      const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                      setNewCourse({...newCourse, price: val});
+                    }}
+                  />
+                  <textarea 
+                    placeholder="Description" 
+                    className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 md:col-span-2"
+                    value={newCourse.description}
+                    onChange={e => setNewCourse({...newCourse, description: e.target.value})}
+                  />
+                  <button 
+                    onClick={() => onAddCourse(newCourse)}
+                    className="md:col-span-2 bg-emerald-600 text-white font-bold py-3 rounded-xl hover:bg-emerald-700"
+                  >
+                    Create Course
+                  </button>
+                </div>
+              </div>
+              
+              <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+                <div className="p-6 border-b border-slate-50">
+                  <h3 className="font-bold text-slate-900">Existing Courses</h3>
+                </div>
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-widest text-[10px]">
+                    <tr>
+                      <th className="px-6 py-4">Course</th>
+                      <th className="px-6 py-4">Category</th>
+                      <th className="px-6 py-4">Price</th>
+                      <th className="px-6 py-4">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {courses.map(course => (
+                      <tr key={course.id}>
+                        <td className="px-6 py-4 font-bold text-slate-900">{course.title}</td>
+                        <td className="px-6 py-4 text-slate-500">{course.category}</td>
+                        <td className="px-6 py-4 font-bold text-emerald-600">₹{course.price}</td>
+                        <td className="px-6 py-4 flex space-x-2">
+                          <button 
+                            onClick={() => {
+                              setEditingLessonsFor(course.id);
+                              onSelectCourseForLessons(course.id);
+                            }}
+                            className="bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-colors flex items-center"
+                          >
+                            <BookOpen size={14} className="mr-1.5" />
+                            Manage Lessons
+                          </button>
+                          <button className="text-xs font-bold text-red-400 hover:text-red-500 px-2">Delete</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : (
+            <div className="space-y-6">
+              <button 
+                onClick={() => {
+                  setEditingLessonsFor(null);
+                  onSelectCourseForLessons(null);
+                }}
+                className="flex items-center text-slate-500 hover:text-slate-900 font-bold text-sm"
+              >
+                <ArrowLeft size={18} className="mr-2" />
+                Back to Courses
+              </button>
+
+              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                <h3 className="font-bold text-slate-900 mb-4 flex items-center">
+                  <Plus size={20} className="mr-2 text-emerald-500" />
+                  Add Lesson to {courses.find(c => c.id === editingLessonsFor)?.title}
+                </h3>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <input 
+                    type="text" 
+                    placeholder="Lesson Title" 
+                    className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3"
+                    value={newLesson.title}
+                    onChange={e => setNewLesson({...newLesson, title: e.target.value})}
+                  />
+                  <input 
+                    type="text" 
+                    placeholder="Video URL (YouTube/Vimeo)" 
+                    className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3"
+                    value={newLesson.videoUrl}
+                    onChange={e => setNewLesson({...newLesson, videoUrl: e.target.value})}
+                  />
+                  <input 
+                    type="number" 
+                    placeholder="Order" 
+                    className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3"
+                    value={newLesson.order}
+                    onChange={e => setNewLesson({...newLesson, order: parseInt(e.target.value) || 1})}
+                  />
+                  <textarea 
+                    placeholder="Task Description" 
+                    className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 md:col-span-2"
+                    value={newLesson.taskDescription}
+                    onChange={e => setNewLesson({...newLesson, taskDescription: e.target.value})}
+                  />
+                  <button 
+                    onClick={handleAddLesson}
+                    className="md:col-span-2 bg-emerald-600 text-white font-bold py-3 rounded-xl hover:bg-emerald-700"
+                  >
+                    Add Lesson
+                  </button>
+                </div>
+              </div>
+
+              {/* Existing Lessons List */}
+              <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+                <div className="p-6 border-b border-slate-50 flex justify-between items-center">
+                  <h3 className="font-bold text-slate-900">Lessons in this Course</h3>
+                  <span className="text-xs font-bold text-slate-400">{lessons.length} Lessons</span>
+                </div>
+                <div className="divide-y divide-slate-50">
+                  {lessons.length > 0 ? (
+                    lessons.sort((a, b) => a.order - b.order).map((lesson) => (
+                      <div key={lesson.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                        <div className="flex items-center space-x-4">
+                          <div className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center text-xs font-bold text-slate-500">
+                            {lesson.order}
+                          </div>
+                          <div>
+                            <p className="font-bold text-slate-900 text-sm">{lesson.title}</p>
+                            <p className="text-[10px] text-slate-400 truncate max-w-[200px]">{lesson.videoUrl}</p>
+                          </div>
+                        </div>
+                        <button className="text-xs font-bold text-red-400 hover:text-red-500">Remove</button>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-8 text-center text-slate-500">
+                      <Play size={32} className="mx-auto mb-2 opacity-20" />
+                      <p className="text-sm">No lessons added yet. Add your first lesson above.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeSubTab === 'tasks' && (
+        <div className="space-y-6">
+          <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+            <h3 className="font-bold text-slate-900 mb-4 flex items-center">
+              <Plus size={20} className="mr-2 text-emerald-500" />
+              Add Daily Task
+            </h3>
+            <div className="grid md:grid-cols-2 gap-4">
+              <input 
+                type="text" 
+                placeholder="Task Title" 
+                className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3"
+                value={newTask.title}
+                onChange={e => setNewTask({...newTask, title: e.target.value})}
+              />
+              <input 
+                type="number" 
+                placeholder="Reward (₹)" 
+                className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3"
+                value={isNaN(newTask.reward) ? '' : newTask.reward}
+                onChange={e => {
+                  const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                  setNewTask({...newTask, reward: val});
+                }}
+              />
+              <textarea 
+                placeholder="Task Description" 
+                className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 md:col-span-2"
+                value={newTask.description}
+                onChange={e => setNewTask({...newTask, description: e.target.value})}
+              />
+              <button 
+                onClick={() => onAddTask(newTask)}
+                className="md:col-span-2 bg-emerald-600 text-white font-bold py-3 rounded-xl hover:bg-emerald-700"
+              >
+                Create Task
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-widest text-[10px]">
+                <tr>
+                  <th className="px-6 py-4">Task</th>
+                  <th className="px-6 py-4">Reward</th>
+                  <th className="px-6 py-4">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {tasks.map(task => (
+                  <tr key={task.id}>
+                    <td className="px-6 py-4">
+                      <p className="font-bold text-slate-900">{task.title}</p>
+                      <p className="text-xs text-slate-500">{task.description}</p>
+                    </td>
+                    <td className="px-6 py-4 font-bold text-emerald-600">₹{task.reward}</td>
+                    <td className="px-6 py-4">
+                      <button 
+                        onClick={() => {
+                          if (window.confirm('Are you sure you want to delete this task?')) {
+                            onDeleteTask(task.id);
+                          }
+                        }}
+                        className="text-xs font-bold text-red-400 hover:text-red-500"
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeSubTab === 'submissions' && (
+        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-widest text-[10px]">
+              <tr>
+                <th className="px-6 py-4">User</th>
+                <th className="px-6 py-4">Task</th>
+                <th className="px-6 py-4">Proof</th>
+                <th className="px-6 py-4">Status</th>
+                <th className="px-6 py-4">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {allSubmissions.map(sub => (
+                <tr key={sub.id}>
+                  <td className="px-6 py-4">
+                    <p className="font-bold text-slate-900">{sub.userDisplayName}</p>
+                    <p className="text-[10px] text-slate-400 font-mono">{sub.uid.substring(0, 8)}...</p>
+                  </td>
+                  <td className="px-6 py-4">
+                    <p className="font-bold text-slate-900">{sub.taskTitle}</p>
+                    <p className="text-xs text-emerald-600 font-bold">₹{sub.reward}</p>
+                  </td>
+                  <td className="px-6 py-4">
+                    <a 
+                      href={sub.proofUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center text-emerald-600 hover:text-emerald-700 font-bold"
+                    >
+                      View Proof <ExternalLink size={12} className="ml-1" />
+                    </a>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase ${
+                      sub.status === 'pending' ? 'bg-amber-100 text-amber-700' : 
+                      sub.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                    }`}>
+                      {sub.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 flex space-x-2">
+                    {sub.status === 'pending' && (
+                      <>
+                        <button 
+                          onClick={() => onApproveTaskSubmission(sub)}
+                          className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100"
+                          title="Approve"
+                        >
+                          <Check size={16} />
+                        </button>
+                        <button 
+                          onClick={() => onRejectTaskSubmission(sub.id)}
+                          className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100"
+                          title="Reject"
+                        >
+                          <X size={16} />
+                        </button>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {allSubmissions.length === 0 && (
+            <div className="p-12 text-center text-slate-400">
+              No task submissions found.
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeSubTab === 'withdrawals' && (
+        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-widest text-[10px]">
+              <tr>
+                <th className="px-6 py-4">User ID</th>
+                <th className="px-6 py-4">Amount</th>
+                <th className="px-6 py-4">UPI ID</th>
+                <th className="px-6 py-4">Status</th>
+                <th className="px-6 py-4">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {withdrawals.map(req => (
+                <tr key={req.id}>
+                  <td className="px-6 py-4 font-mono text-xs text-slate-500">{req.uid.substring(0, 8)}...</td>
+                  <td className="px-6 py-4 font-bold text-slate-900">₹{req.amount}</td>
+                  <td className="px-6 py-4 text-slate-500">{req.upiId}</td>
+                  <td className="px-6 py-4">
+                    <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase ${
+                      req.status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+                    }`}>
+                      {req.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 flex space-x-2">
+                    {req.status === 'pending' && (
+                      <>
+                        <button 
+                          onClick={() => onApproveWithdrawal(req.id)}
+                          className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100"
+                        >
+                          <Check size={16} />
+                        </button>
+                        <button 
+                          onClick={() => onRejectWithdrawal(req.id)}
+                          className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100"
+                        >
+                          <X size={16} />
+                        </button>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}

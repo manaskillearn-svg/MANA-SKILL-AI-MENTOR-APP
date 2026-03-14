@@ -1,0 +1,103 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and progress information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["student", "admin"] },
+        "earnings": { "type": "number" },
+        "referralCode": { "type": "string" },
+        "referredBy": { "type": "string" },
+        "completedLessons": { "type": "array", "items": { "type": "string" } },
+        "completedTasks": { "type": "array", "items": { "type": "string" } },
+        "isPremium": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Course": {
+      "title": "Course",
+      "description": "Learning course metadata",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "thumbnail": { "type": "string" },
+        "price": { "type": "number" },
+        "isFree": { "type": "boolean" },
+        "category": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "price"]
+    },
+    "Lesson": {
+      "title": "Lesson",
+      "description": "Individual lesson within a course",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "courseId": { "type": "string" },
+        "title": { "type": "string" },
+        "videoUrl": { "type": "string" },
+        "taskDescription": { "type": "string" },
+        "order": { "type": "number" }
+      },
+      "required": ["courseId", "title", "order"]
+    },
+    "DailyTask": {
+      "title": "DailyTask",
+      "description": "Tasks assigned to users daily",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "reward": { "type": "number" },
+        "date": { "type": "string" }
+      },
+      "required": ["title", "date"]
+    },
+    "EarningRecord": {
+      "title": "EarningRecord",
+      "description": "Record of earnings from referrals or sales",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "amount": { "type": "number" },
+        "type": { "type": "string", "enum": ["referral", "sale", "task"] },
+        "description": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "amount", "type"]
+    },
+    "WithdrawalRequest": {
+      "title": "WithdrawalRequest",
+      "description": "User request to withdraw earnings",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "upiId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "amount", "status", "upiId"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": { "schema": "User", "description": "User profiles" },
+    "/courses/{courseId}": { "schema": "Course", "description": "Course catalog" },
+    "/courses/{courseId}/lessons/{lessonId}": { "schema": "Lesson", "description": "Lessons for a course" },
+    "/dailyTasks/{taskId}": { "schema": "DailyTask", "description": "Daily tasks catalog" },
+    "/earnings/{earningId}": { "schema": "EarningRecord", "description": "Earning history" },
+    "/withdrawals/{withdrawalId}": { "schema": "WithdrawalRequest", "description": "Withdrawal requests" }
+  }
+}

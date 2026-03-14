@@ -1,0 +1,133 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    // Collection: users
+    // Fields: uid, email, displayName, photoURL, role, earnings, referralCode, referredBy, completedLessons, completedTasks, isPremium, createdAt
+    //
+    // Collection: courses
+    // Fields: title, description, thumbnail, price, isFree, category, createdAt
+    //
+    // Collection: lessons (subcollection of courses)
+    // Fields: courseId, title, videoUrl, taskDescription, order
+    //
+    // Collection: dailyTasks
+    // Fields: title, description, reward, date
+    //
+    // Collection: earnings
+    // Fields: uid, amount, type, description, timestamp
+    //
+    // Collection: withdrawals
+    // Fields: uid, amount, status, upiId, timestamp
+    //
+    // Collection: taskSubmissions
+    // Fields: uid, userDisplayName, taskId, taskTitle, proofUrl, status, reward, timestamp
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         (request.auth.token.email == "manaskill.earn@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidUser(data) {
+      return data.uid is string && data.email is string &&
+             data.role in ['student', 'admin'] &&
+             data.earnings is number &&
+             data.completedLessons is list &&
+             data.completedTasks is list;
+    }
+
+    function isValidCourse(data) {
+      return data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.price is number && data.price >= 0;
+    }
+
+    function isValidLesson(data) {
+      return data.title is string && data.title.size() > 0 &&
+             data.courseId is string &&
+             data.order is number;
+    }
+
+    function isValidEarning(data) {
+      return data.uid is string && data.amount is number && data.type in ['referral', 'sale', 'task'] &&
+             (data.uid == request.auth.uid || (data.type == 'referral' && (data.amount == 5 || data.amount == 20)));
+    }
+
+    function isValidWithdrawal(data) {
+      return data.uid is string && data.amount is number && data.status in ['pending', 'approved', 'rejected'] && data.upiId is string;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      // Allow authenticated users to read profiles to find referrers by code
+      // Note: In production, consider splitting PII into a private collection
+      allow read: if isAuthenticated(); 
+      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == 'student' || isAdmin());
+      allow update: if isAuthenticated() && (
+        (isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.role == resource.data.role) ||
+        isAdmin()
+      );
+    }
+
+    match /courses/{courseId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+
+      match /lessons/{lessonId} {
+        allow read: if isAuthenticated();
+        allow write: if isAdmin();
+      }
+    }
+
+    match /dailyTasks/{taskId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /earnings/{earningId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.uid || isAdmin());
+      // Allow creating referral earnings for others
+      allow create: if isAuthenticated() && isValidEarning(request.resource.data);
+      allow update, delete: if isAdmin();
+    }
+
+    match /withdrawals/{withdrawalId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.uid || isAdmin());
+      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.uid && isValidWithdrawal(request.resource.data) && request.resource.data.status == 'pending';
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /taskSubmissions/{submissionId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.uid || isAdmin());
+      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.uid && request.resource.data.status == 'pending';
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    match /test/connection {
+      allow read: if true;
+    }
+  }
+}

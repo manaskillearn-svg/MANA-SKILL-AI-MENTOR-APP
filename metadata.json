@@ -1,0 +1,9 @@
+{
+  "name": "Mana Skill AI Mentor",
+  "description": "A modern LMS and AI Mentor platform designed for students in India to learn digital skills and earn money online safely.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}

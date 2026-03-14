@@ -1,0 +1,79 @@
+export type UserRole = 'student' | 'admin';
+
+export interface UserProfile {
+  uid: string;
+  email: string;
+  displayName: string;
+  photoURL: string;
+  role: UserRole;
+  earnings: number;
+  referralCode: string;
+  referredBy?: string;
+  completedLessons: string[];
+  completedTasks: string[];
+  isPremium: boolean;
+  createdAt: any;
+}
+
+export interface Course {
+  id: string;
+  title: string;
+  description: string;
+  thumbnail: string;
+  price: number;
+  isFree: boolean;
+  category: string;
+  createdAt: any;
+}
+
+export interface Lesson {
+  id: string;
+  courseId: string;
+  title: string;
+  videoUrl: string;
+  taskDescription: string;
+  order: number;
+}
+
+export interface DailyTask {
+  id: string;
+  title: string;
+  description: string;
+  reward: number;
+  date: string;
+}
+
+export interface EarningRecord {
+  id: string;
+  uid: string;
+  amount: number;
+  type: 'referral' | 'sale' | 'task';
+  description: string;
+  timestamp: any;
+}
+
+export interface WithdrawalRequest {
+  id: string;
+  uid: string;
+  amount: number;
+  status: 'pending' | 'approved' | 'rejected';
+  upiId: string;
+  timestamp: any;
+}
+
+export interface TaskSubmission {
+  id: string;
+  uid: string;
+  userDisplayName: string;
+  taskId: string;
+  taskTitle: string;
+  proofUrl: string;
+  status: 'pending' | 'approved' | 'rejected';
+  reward: number;
+  timestamp: any;
+}
+
+export interface ChatMessage {
+  role: 'user' | 'model';
+  text: string;
+}
