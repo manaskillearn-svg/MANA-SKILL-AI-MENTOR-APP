@@ -9,8 +9,9 @@ import LessonView from './components/LessonView';
 import AIMentor from './components/AIMentor';
 import Earnings from './components/Earnings';
 import AdminPanel from './components/AdminPanel';
-import { Loader2, Sparkles } from 'lucide-react';
-import { motion } from 'motion/react';
+import { Loader2, Sparkles, CreditCard } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { UPIPayment } from './components/UPIPayment';
 
 enum OperationType {
   CREATE = 'create',
@@ -72,10 +73,19 @@ export default function App() {
   const [earnings, setEarnings] = useState<EarningRecord[]>([]);
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
   const [submissions, setSubmissions] = useState<TaskSubmission[]>([]);
+  const [payments, setPayments] = useState<any[]>([]);
+  const [showUPIPayment, setShowUPIPayment] = useState(false);
+  const [courseToPurchase, setCourseToPurchase] = useState<Course | null>(null);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [courseLessons, setCourseLessons] = useState<Lesson[]>([]);
   const [adminSelectedCourseId, setAdminSelectedCourseId] = useState<string | null>(null);
   const [adminLessons, setAdminLessons] = useState<Lesson[]>([]);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   // Auth Listener
   useEffect(() => {
@@ -141,6 +151,7 @@ export default function App() {
               referredBy: referredByUid,
               completedLessons: [],
               completedTasks: [],
+              unlockedCourses: [],
               isPremium: false,
               createdAt: serverTimestamp(),
             };
@@ -183,7 +194,9 @@ export default function App() {
     );
 
     const unsubWithdrawals = onSnapshot(
-      query(collection(db, 'withdrawals'), where('uid', '==', user.uid), orderBy('timestamp', 'desc')),
+      user.role === 'admin'
+        ? query(collection(db, 'withdrawals'), orderBy('timestamp', 'desc'))
+        : query(collection(db, 'withdrawals'), where('uid', '==', user.uid), orderBy('timestamp', 'desc')),
       (snap) => {
         setWithdrawals(snap.docs.map(d => ({ id: d.id, ...d.data() } as WithdrawalRequest)));
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'withdrawals')
@@ -198,6 +211,15 @@ export default function App() {
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'taskSubmissions')
     );
 
+    const unsubPayments = onSnapshot(
+      user.role === 'admin'
+        ? query(collection(db, 'payments'), orderBy('timestamp', 'desc'))
+        : query(collection(db, 'payments'), where('uid', '==', user.uid), orderBy('timestamp', 'desc')),
+      (snap) => {
+        setPayments(snap.docs.map(d => ({ id: d.id, ...d.data() } as any)));
+      }, (error) => handleFirestoreError(error, OperationType.LIST, 'payments')
+    );
+
     // Sync user profile changes
     const unsubUser = onSnapshot(doc(db, 'users', user.uid), (snap) => {
       if (snap.exists()) setUser(snap.data() as UserProfile);
@@ -209,6 +231,7 @@ export default function App() {
       unsubEarnings();
       unsubWithdrawals();
       unsubSubmissions();
+      unsubPayments();
       unsubUser();
     };
   }, [user?.uid]);
@@ -307,10 +330,24 @@ export default function App() {
 
   const handleApproveTaskSubmission = async (submission: TaskSubmission) => {
     try {
-      // 1. Update submission status
+      // 1. Fetch task to check limits
+      const taskRef = doc(db, 'dailyTasks', submission.taskId);
+      const taskDoc = await getDoc(taskRef);
+      
+      if (taskDoc.exists()) {
+        const taskData = taskDoc.data() as DailyTask;
+        if (taskData.maxCompletions && taskData.maxCompletions > 0) {
+          if ((taskData.completionCount || 0) >= taskData.maxCompletions) {
+            showToast('This task has already reached its maximum completion limit.', 'error');
+            return;
+          }
+        }
+      }
+
+      // 2. Update submission status
       await updateDoc(doc(db, 'taskSubmissions', submission.id), { status: 'approved' });
       
-      // 2. Award user and mark task as completed
+      // 3. Award user and mark task as completed
       const userRef = doc(db, 'users', submission.uid);
       const userDoc = await getDoc(userRef);
       if (userDoc.exists()) {
@@ -323,7 +360,12 @@ export default function App() {
             completedTasks: [...completedTasks, submission.taskId]
           });
 
-          // 3. Log earning
+          // 4. Increment task completion count
+          await updateDoc(taskRef, {
+            completionCount: increment(1)
+          });
+
+          // 5. Log earning
           await addDoc(collection(db, 'earnings'), {
             uid: submission.uid,
             amount: submission.reward,
@@ -333,10 +375,10 @@ export default function App() {
           });
         }
       }
-      alert('Submission approved and reward granted!');
+      showToast('Submission approved and reward granted!');
     } catch (error) {
       console.error("Error approving submission:", error);
-      alert('Failed to approve submission.');
+      showToast('Failed to approve submission.', 'error');
     }
   };
 
@@ -356,30 +398,50 @@ export default function App() {
 
   const handlePurchaseCourse = async (course: Course) => {
     if (!user) return;
-    if (course.isFree || user.isPremium) return;
+    if (course.isFree || (user.unlockedCourses && user.unlockedCourses.includes(course.id))) return;
 
-    // In a real app, integrate payment gateway here
-    // For now, we'll simulate a successful purchase
-    
-    const updates: any = { isPremium: true };
-    await updateDoc(doc(db, 'users', user.uid), updates);
+    setCourseToPurchase(course);
+    setShowUPIPayment(true);
+  };
 
-    // Reward referrer with ₹20 if the user was referred (via earnings collection only)
-    if (user.referredBy) {
-      try {
-        await addDoc(collection(db, 'earnings'), {
-          uid: user.referredBy,
-          amount: 20,
-          type: 'referral',
-          description: `Referral premium bonus: ${user.displayName}`,
-          timestamp: serverTimestamp()
-        });
-      } catch (error) {
-        console.error("Error rewarding referrer for premium:", error);
+  const handleApprovePayment = async (payment: any) => {
+    try {
+      // 1. Update payment status
+      await updateDoc(doc(db, 'payments', payment.id), { status: 'approved' });
+      
+      // 2. Unlock course for user
+      const userRef = doc(db, 'users', payment.uid);
+      const userDoc = await getDoc(userRef);
+      if (userDoc.exists()) {
+        const userData = userDoc.data() as UserProfile;
+        const unlockedCourses = userData.unlockedCourses || [];
+        
+        if (!unlockedCourses.includes(payment.courseId)) {
+          await updateDoc(userRef, {
+            unlockedCourses: [...unlockedCourses, payment.courseId]
+          });
+
+          // 3. Reward referrer if applicable
+          if (userData.referredBy) {
+            await addDoc(collection(db, 'earnings'), {
+              uid: userData.referredBy,
+              amount: Math.floor(payment.amount * 0.1), // 10% commission
+              type: 'sale',
+              description: `Commission for ${userData.displayName}'s purchase of ${payment.courseTitle}`,
+              timestamp: serverTimestamp()
+            });
+          }
+        }
       }
+      showToast('Payment approved and course unlocked!');
+    } catch (error) {
+      console.error("Error approving payment:", error);
+      showToast('Failed to approve payment.', 'error');
     }
+  };
 
-    alert(`Successfully unlocked ${course.title}! You are now a Premium member.`);
+  const handleRejectPayment = async (paymentId: string) => {
+    await updateDoc(doc(db, 'payments', paymentId), { status: 'rejected' });
   };
 
   const handleRequestWithdrawal = async (amount: number, upiId: string) => {
@@ -406,9 +468,14 @@ export default function App() {
     });
   };
 
+  const handleUpdateCourse = async (id: string, courseData: Partial<Course>) => {
+    await updateDoc(doc(db, 'courses', id), courseData);
+  };
+
   const handleAddTask = async (taskData: Partial<DailyTask>) => {
     await addDoc(collection(db, 'dailyTasks'), {
       ...taskData,
+      completionCount: 0,
       date: new Date().toISOString().split('T')[0]
     });
   };
@@ -418,7 +485,7 @@ export default function App() {
   };
 
   const handleApproveWithdrawal = async (id: string) => {
-    await updateDoc(doc(db, 'withdrawals', id), { status: 'approved' });
+    await updateDoc(doc(db, 'withdrawals', id), { status: 'successful' });
   };
 
   const handleRejectWithdrawal = async (id: string) => {
@@ -474,6 +541,19 @@ export default function App() {
       user={user} 
       onLogout={handleLogout}
     >
+      {showUPIPayment && courseToPurchase && (
+        <UPIPayment 
+          course={courseToPurchase} 
+          onClose={() => {
+            setShowUPIPayment(false);
+            setCourseToPurchase(null);
+          }} 
+          onSuccess={() => {
+            setShowUPIPayment(false);
+            setCourseToPurchase(null);
+          }}
+        />
+      )}
       {selectedCourse ? (
         <LessonView 
           course={selectedCourse} 
@@ -559,9 +639,11 @@ export default function App() {
               tasks={tasks} 
               withdrawals={withdrawals} 
               lessons={adminLessons}
+              payments={payments}
               initialSubTab={adminSelectedCourseId ? 'courses' : 'stats'}
               initialCourseId={adminSelectedCourseId}
               onAddCourse={handleAddCourse} 
+              onUpdateCourse={handleUpdateCourse}
               onAddTask={handleAddTask} 
               onDeleteTask={handleDeleteTask}
               onApproveWithdrawal={handleApproveWithdrawal} 
@@ -569,10 +651,34 @@ export default function App() {
               onSelectCourseForLessons={setAdminSelectedCourseId}
               onApproveTaskSubmission={handleApproveTaskSubmission}
               onRejectTaskSubmission={handleRejectTaskSubmission}
+              onApprovePayment={handleApprovePayment}
+              onRejectPayment={handleRejectPayment}
             />
           )}
         </>
       )}
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-2xl shadow-2xl flex items-center space-x-3 min-w-[300px]"
+            style={{ 
+              backgroundColor: toast.type === 'success' ? '#10b981' : '#ef4444',
+              color: 'white'
+            }}
+          >
+            {toast.type === 'success' ? (
+              <Sparkles size={20} />
+            ) : (
+              <CreditCard size={20} />
+            )}
+            <span className="font-bold text-sm">{toast.message}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </Layout>
   );
 }

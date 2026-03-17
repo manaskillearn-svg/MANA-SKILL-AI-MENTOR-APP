@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Mana Skill</string>
+    <string name="title_activity_main">Mana Skill</string>
+    <string name="package_name">com.manaskill.app</string>
+    <string name="custom_url_scheme">com.manaskill.app</string>
+</resources>

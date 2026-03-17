@@ -41,7 +41,7 @@ export default function CourseList({ courses, user, onSelectCourse, onPurchaseCo
                 className="w-full h-full object-cover"
                 referrerPolicy="no-referrer"
               />
-              {!course.isFree && !user.isPremium && (
+              {!course.isFree && !(user.unlockedCourses && user.unlockedCourses.includes(course.id)) && (
                 <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[2px] flex items-center justify-center">
                   <div className="bg-white/20 backdrop-blur-md border border-white/30 rounded-full p-3 text-white">
                     <Lock size={24} />
@@ -87,19 +87,19 @@ export default function CourseList({ courses, user, onSelectCourse, onPurchaseCo
                 
                 <button
                   onClick={() => {
-                    if (course.isFree || user.isPremium) {
+                    if (course.isFree || (user.unlockedCourses && user.unlockedCourses.includes(course.id))) {
                       onSelectCourse(course);
                     } else {
                       onPurchaseCourse(course);
                     }
                   }}
                   className={`px-4 py-2 rounded-xl font-bold text-sm transition-all ${
-                    course.isFree || user.isPremium
+                    course.isFree || (user.unlockedCourses && user.unlockedCourses.includes(course.id))
                       ? 'bg-emerald-600 text-white hover:bg-emerald-700'
                       : 'bg-slate-100 text-slate-900 hover:bg-slate-200'
                   }`}
                 >
-                  {course.isFree || user.isPremium ? (
+                  {course.isFree || (user.unlockedCourses && user.unlockedCourses.includes(course.id)) ? (
                     <div className="flex items-center">
                       <Play size={14} className="mr-2 fill-current" />
                       Start Learning

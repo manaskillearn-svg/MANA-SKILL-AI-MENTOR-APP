@@ -52,7 +52,8 @@ service cloud.firestore {
              data.role in ['student', 'admin'] &&
              data.earnings is number &&
              data.completedLessons is list &&
-             data.completedTasks is list;
+             data.completedTasks is list &&
+             (!('unlockedCourses' in data) || data.unlockedCourses is list);
     }
 
     function isValidCourse(data) {
@@ -72,7 +73,20 @@ service cloud.firestore {
     }
 
     function isValidWithdrawal(data) {
-      return data.uid is string && data.amount is number && data.status in ['pending', 'approved', 'rejected'] && data.upiId is string;
+      return data.uid is string && data.amount is number && data.status in ['pending', 'successful', 'rejected'] && data.upiId is string;
+    }
+
+    function isValidTask(data) {
+      return data.title is string && data.title.size() > 0 &&
+             data.reward is number &&
+             (!('maxCompletions' in data) || data.maxCompletions is number) &&
+             (!('completionCount' in data) || data.completionCount is number);
+    }
+
+    function isValidPayment(data) {
+      return data.uid is string && data.courseId is string &&
+             data.amount is number && data.screenshotUrl is string &&
+             data.status in ['pending', 'approved', 'rejected'];
     }
 
     // ===============================================================
@@ -102,7 +116,9 @@ service cloud.firestore {
 
     match /dailyTasks/{taskId} {
       allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      allow create: if isAdmin() && isValidTask(request.resource.data);
+      allow update: if isAdmin() && isValidTask(request.resource.data);
+      allow delete: if isAdmin();
     }
 
     match /earnings/{earningId} {
@@ -122,6 +138,13 @@ service cloud.firestore {
     match /taskSubmissions/{submissionId} {
       allow read: if isAuthenticated() && (request.auth.uid == resource.data.uid || isAdmin());
       allow create: if isAuthenticated() && request.auth.uid == request.resource.data.uid && request.resource.data.status == 'pending';
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /payments/{paymentId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.uid || isAdmin());
+      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.uid && isValidPayment(request.resource.data) && request.resource.data.status == 'pending';
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }

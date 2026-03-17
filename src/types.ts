@@ -11,6 +11,7 @@ export interface UserProfile {
   referredBy?: string;
   completedLessons: string[];
   completedTasks: string[];
+  unlockedCourses: string[];
   isPremium: boolean;
   createdAt: any;
 }
@@ -41,6 +42,8 @@ export interface DailyTask {
   description: string;
   reward: number;
   date: string;
+  maxCompletions?: number;
+  completionCount?: number;
 }
 
 export interface EarningRecord {
@@ -56,7 +59,7 @@ export interface WithdrawalRequest {
   id: string;
   uid: string;
   amount: number;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'successful' | 'rejected' | 'approved';
   upiId: string;
   timestamp: any;
 }
@@ -76,4 +79,15 @@ export interface TaskSubmission {
 export interface ChatMessage {
   role: 'user' | 'model';
   text: string;
+}
+
+export interface PaymentRequest {
+  id: string;
+  uid: string;
+  userDisplayName: string;
+  courseId: string;
+  amount: number;
+  screenshotUrl: string;
+  status: 'pending' | 'approved' | 'rejected';
+  timestamp: any;
 }

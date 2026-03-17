@@ -15,10 +15,27 @@
         "referredBy": { "type": "string" },
         "completedLessons": { "type": "array", "items": { "type": "string" } },
         "completedTasks": { "type": "array", "items": { "type": "string" } },
+        "unlockedCourses": { "type": "array", "items": { "type": "string" }, "description": "List of course IDs unlocked by the user" },
         "isPremium": { "type": "boolean" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "email", "role"]
+    },
+    "PaymentRequest": {
+      "title": "PaymentRequest",
+      "description": "Manual UPI payment request with screenshot",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "courseId": { "type": "string" },
+        "courseTitle": { "type": "string" },
+        "amount": { "type": "number" },
+        "screenshotUrl": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "courseId", "amount", "screenshotUrl", "status"]
     },
     "Course": {
       "title": "Course",
@@ -59,7 +76,9 @@
         "title": { "type": "string" },
         "description": { "type": "string" },
         "reward": { "type": "number" },
-        "date": { "type": "string" }
+        "date": { "type": "string" },
+        "maxCompletions": { "type": "number", "description": "Maximum number of users who can complete this task (0 for unlimited)" },
+        "completionCount": { "type": "number", "description": "Current number of approved completions" }
       },
       "required": ["title", "date"]
     },
@@ -85,7 +104,7 @@
         "id": { "type": "string" },
         "uid": { "type": "string" },
         "amount": { "type": "number" },
-        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "status": { "type": "string", "enum": ["pending", "successful", "rejected"] },
         "upiId": { "type": "string" },
         "timestamp": { "type": "string", "format": "date-time" }
       },
@@ -98,6 +117,7 @@
     "/courses/{courseId}/lessons/{lessonId}": { "schema": "Lesson", "description": "Lessons for a course" },
     "/dailyTasks/{taskId}": { "schema": "DailyTask", "description": "Daily tasks catalog" },
     "/earnings/{earningId}": { "schema": "EarningRecord", "description": "Earning history" },
-    "/withdrawals/{withdrawalId}": { "schema": "WithdrawalRequest", "description": "Withdrawal requests" }
+    "/withdrawals/{withdrawalId}": { "schema": "WithdrawalRequest", "description": "Withdrawal requests" },
+    "/payments/{paymentId}": { "schema": "PaymentRequest", "description": "Manual payment requests" }
   }
 }

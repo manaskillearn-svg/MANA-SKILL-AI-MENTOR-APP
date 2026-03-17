@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { ShieldCheck, Plus, Check, X, Users, BookOpen, Wallet, LayoutDashboard, Sparkles, ArrowLeft, Play, Camera, ExternalLink } from 'lucide-react';
-import { Course, DailyTask, WithdrawalRequest, Lesson, TaskSubmission } from '../types';
+import { ShieldCheck, Plus, Check, X, Users, BookOpen, Wallet, LayoutDashboard, Sparkles, ArrowLeft, Play, Camera, ExternalLink, AlertCircle } from 'lucide-react';
+import { Course, DailyTask, WithdrawalRequest, Lesson, TaskSubmission, PaymentRequest } from '../types';
 import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 
@@ -9,14 +9,18 @@ interface AdminPanelProps {
   courses: Course[];
   tasks: DailyTask[];
   withdrawals: WithdrawalRequest[];
+  payments: PaymentRequest[];
   lessons: Lesson[];
   initialSubTab?: string;
   initialCourseId?: string | null; // Added optional prop
   onAddCourse: (course: Partial<Course>) => void;
+  onUpdateCourse: (id: string, course: Partial<Course>) => void;
   onAddTask: (task: Partial<DailyTask>) => void;
   onDeleteTask: (taskId: string) => void;
   onApproveWithdrawal: (id: string) => void;
   onRejectWithdrawal: (id: string) => void;
+  onApprovePayment: (payment: PaymentRequest) => void;
+  onRejectPayment: (paymentId: string) => void;
   onSelectCourseForLessons: (courseId: string | null) => void;
   onApproveTaskSubmission: (submission: TaskSubmission) => void;
   onRejectTaskSubmission: (submissionId: string) => void;
@@ -26,24 +30,38 @@ export default function AdminPanel({
   courses, 
   tasks, 
   withdrawals, 
+  payments,
   lessons,
   initialSubTab = 'stats',
   initialCourseId = null, // Default value
   onAddCourse, 
+  onUpdateCourse,
   onAddTask, 
   onDeleteTask,
   onApproveWithdrawal, 
   onRejectWithdrawal,
+  onApprovePayment,
+  onRejectPayment,
   onSelectCourseForLessons,
   onApproveTaskSubmission,
   onRejectTaskSubmission
 }: AdminPanelProps) {
   const [activeSubTab, setActiveSubTab] = useState(initialSubTab);
-  const [newCourse, setNewCourse] = useState({ title: '', description: '', price: 0, category: 'Marketing', isFree: true });
-  const [newTask, setNewTask] = useState({ title: '', description: '', reward: 5 });
+  const [newCourse, setNewCourse] = useState({ title: '', description: '', price: 0, category: 'Marketing', isFree: true, thumbnail: '' });
+  const [editingCourse, setEditingCourse] = useState<Course | null>(null);
+  const [newTask, setNewTask] = useState({ title: '', description: '', reward: 5, maxCompletions: 0 });
   const [editingLessonsFor, setEditingLessonsFor] = useState<string | null>(initialCourseId);
   const [newLesson, setNewLesson] = useState({ title: '', videoUrl: '', taskDescription: '', order: 1 });
   const [allSubmissions, setAllSubmissions] = useState<TaskSubmission[]>([]);
+  const [configStatus, setConfigStatus] = useState<any>(null);
+
+  // Fetch config status
+  useEffect(() => {
+    fetch('/api/admin/config-status')
+      .then(res => res.json())
+      .then(data => setConfigStatus(data))
+      .catch(err => console.error('Error fetching config status:', err));
+  }, []);
 
   // Update state if initial props change
   useEffect(() => {
@@ -86,8 +104,11 @@ export default function AdminPanel({
       await onAddTask(t);
     }
 
-    alert('Sample data seeded successfully!');
+    setSeedStatus('Sample data seeded successfully!');
+    setTimeout(() => setSeedStatus(''), 3000);
   };
+
+  const [seedStatus, setSeedStatus] = useState('');
 
   const handleAddLesson = () => {
     if (!editingLessonsFor) return;
@@ -100,7 +121,16 @@ export default function AdminPanel({
 
   return (
     <div className="space-y-8">
-      <section className="flex justify-between items-center">
+      <section className="flex justify-between items-center relative">
+        {seedStatus && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="absolute -top-12 left-0 right-0 bg-emerald-600 text-white text-xs font-bold py-2 px-4 rounded-xl text-center shadow-lg"
+          >
+            {seedStatus}
+          </motion.div>
+        )}
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Admin Control Center</h2>
           <p className="text-slate-500">Manage your platform and users.</p>
@@ -126,6 +156,7 @@ export default function AdminPanel({
           { id: 'courses', label: 'Courses', icon: BookOpen },
           { id: 'tasks', label: 'Tasks', icon: Check },
           { id: 'submissions', label: 'Submissions', icon: Camera },
+          { id: 'payments', label: 'Payments', icon: Wallet },
           { id: 'withdrawals', label: 'Payouts', icon: Wallet },
         ].map((tab) => (
           <button
@@ -152,8 +183,8 @@ export default function AdminPanel({
               <p className="text-3xl font-bold text-slate-900">1,248</p>
             </div>
             <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Active Sales</p>
-              <p className="text-3xl font-bold text-emerald-600">₹45,200</p>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Pending Payments</p>
+              <p className="text-3xl font-bold text-emerald-600">{payments.filter(p => p.status === 'pending').length}</p>
             </div>
             <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Pending Tasks</p>
@@ -167,18 +198,58 @@ export default function AdminPanel({
 
           <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
             <h3 className="font-bold text-slate-900 mb-6 flex items-center">
+              <ShieldCheck size={20} className="mr-2 text-emerald-500" />
+              System Configuration
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">UPI Payment Config</p>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-slate-600">UPI ID</span>
+                    <span className={`text-xs font-bold px-2 py-1 rounded-full ${configStatus?.upi?.id ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                      {configStatus?.upi?.id ? 'Configured' : 'Missing'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-slate-600">Name</span>
+                    <span className={`text-xs font-bold px-2 py-1 rounded-full ${configStatus?.upi?.name ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                      {configStatus?.upi?.name ? 'Configured' : 'Missing'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Gemini AI</p>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-slate-600">API Key</span>
+                    <span className={`text-xs font-bold px-2 py-1 rounded-full ${configStatus?.gemini?.apiKey ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                      {configStatus?.gemini?.apiKey ? 'Configured' : 'Missing'}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-2 italic">
+                    Note: Gemini API key is managed by the platform.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
+            <h3 className="font-bold text-slate-900 mb-6 flex items-center">
               <Sparkles size={20} className="mr-2 text-emerald-500" />
               Quick Actions
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <button 
-                onClick={() => setActiveSubTab('courses')}
+                onClick={() => setActiveSubTab('payments')}
                 className="flex flex-col items-center justify-center p-6 rounded-2xl border border-slate-100 hover:border-emerald-200 hover:bg-emerald-50 transition-all group"
               >
                 <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                  <BookOpen size={24} />
+                  <Wallet size={24} />
                 </div>
-                <span className="font-bold text-sm text-slate-700">Manage Lessons</span>
+                <span className="font-bold text-sm text-slate-700">Review Payments</span>
               </button>
               <button 
                 onClick={() => setActiveSubTab('submissions')}
@@ -199,7 +270,7 @@ export default function AdminPanel({
                 <span className="font-bold text-sm text-slate-700">Review Payouts</span>
               </button>
               <button 
-                onClick={() => alert('User management coming soon!')}
+                onClick={() => setSeedStatus('User management coming soon!')}
                 className="flex flex-col items-center justify-center p-6 rounded-2xl border border-slate-100 hover:border-emerald-200 hover:bg-emerald-50 transition-all group"
               >
                 <div className="w-12 h-12 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
@@ -219,38 +290,73 @@ export default function AdminPanel({
               <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
                 <h3 className="font-bold text-slate-900 mb-4 flex items-center">
                   <Plus size={20} className="mr-2 text-emerald-500" />
-                  Add New Course
+                  {editingCourse ? 'Edit Course' : 'Add New Course'}
                 </h3>
                 <div className="grid md:grid-cols-2 gap-4">
                   <input 
                     type="text" 
                     placeholder="Course Title" 
                     className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3"
-                    value={newCourse.title}
-                    onChange={e => setNewCourse({...newCourse, title: e.target.value})}
+                    value={editingCourse ? editingCourse.title : newCourse.title}
+                    onChange={e => editingCourse ? setEditingCourse({...editingCourse, title: e.target.value}) : setNewCourse({...newCourse, title: e.target.value})}
                   />
                   <input 
                     type="number" 
                     placeholder="Price (₹)" 
                     className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3"
-                    value={isNaN(newCourse.price) ? '' : newCourse.price}
+                    value={editingCourse ? editingCourse.price : (isNaN(newCourse.price) ? '' : newCourse.price)}
                     onChange={e => {
                       const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
-                      setNewCourse({...newCourse, price: val});
+                      editingCourse ? setEditingCourse({...editingCourse, price: val}) : setNewCourse({...newCourse, price: val});
                     }}
                   />
+                  <input 
+                    type="text" 
+                    placeholder="Thumbnail URL" 
+                    className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3"
+                    value={editingCourse ? editingCourse.thumbnail : newCourse.thumbnail}
+                    onChange={e => editingCourse ? setEditingCourse({...editingCourse, thumbnail: e.target.value}) : setNewCourse({...newCourse, thumbnail: e.target.value})}
+                  />
+                  <select 
+                    className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3"
+                    value={editingCourse ? editingCourse.category : newCourse.category}
+                    onChange={e => editingCourse ? setEditingCourse({...editingCourse, category: e.target.value}) : setNewCourse({...newCourse, category: e.target.value})}
+                  >
+                    <option value="Marketing">Marketing</option>
+                    <option value="Earning">Earning</option>
+                    <option value="Creation">Creation</option>
+                    <option value="Design">Design</option>
+                  </select>
                   <textarea 
                     placeholder="Description" 
                     className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 md:col-span-2"
-                    value={newCourse.description}
-                    onChange={e => setNewCourse({...newCourse, description: e.target.value})}
+                    value={editingCourse ? editingCourse.description : newCourse.description}
+                    onChange={e => editingCourse ? setEditingCourse({...editingCourse, description: e.target.value}) : setNewCourse({...newCourse, description: e.target.value})}
                   />
-                  <button 
-                    onClick={() => onAddCourse(newCourse)}
-                    className="md:col-span-2 bg-emerald-600 text-white font-bold py-3 rounded-xl hover:bg-emerald-700"
-                  >
-                    Create Course
-                  </button>
+                  <div className="md:col-span-2 flex space-x-4">
+                    <button 
+                      onClick={() => {
+                        if (editingCourse) {
+                          onUpdateCourse(editingCourse.id, editingCourse);
+                          setEditingCourse(null);
+                        } else {
+                          onAddCourse(newCourse);
+                          setNewCourse({ title: '', description: '', price: 0, category: 'Marketing', isFree: true, thumbnail: '' });
+                        }
+                      }}
+                      className="flex-1 bg-emerald-600 text-white font-bold py-3 rounded-xl hover:bg-emerald-700"
+                    >
+                      {editingCourse ? 'Update Course' : 'Create Course'}
+                    </button>
+                    {editingCourse && (
+                      <button 
+                        onClick={() => setEditingCourse(null)}
+                        className="px-6 bg-slate-100 text-slate-600 font-bold py-3 rounded-xl hover:bg-slate-200"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
               
@@ -274,6 +380,15 @@ export default function AdminPanel({
                         <td className="px-6 py-4 text-slate-500">{course.category}</td>
                         <td className="px-6 py-4 font-bold text-emerald-600">₹{course.price}</td>
                         <td className="px-6 py-4 flex space-x-2">
+                          <button 
+                            onClick={() => {
+                              setEditingCourse(course);
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
+                            className="bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors"
+                          >
+                            Edit
+                          </button>
                           <button 
                             onClick={() => {
                               setEditingLessonsFor(course.id);
@@ -389,37 +504,54 @@ export default function AdminPanel({
               <Plus size={20} className="mr-2 text-emerald-500" />
               Add Daily Task
             </h3>
-            <div className="grid md:grid-cols-2 gap-4">
-              <input 
-                type="text" 
-                placeholder="Task Title" 
-                className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3"
-                value={newTask.title}
-                onChange={e => setNewTask({...newTask, title: e.target.value})}
-              />
-              <input 
-                type="number" 
-                placeholder="Reward (₹)" 
-                className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3"
-                value={isNaN(newTask.reward) ? '' : newTask.reward}
-                onChange={e => {
-                  const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
-                  setNewTask({...newTask, reward: val});
-                }}
-              />
-              <textarea 
-                placeholder="Task Description" 
-                className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 md:col-span-2"
-                value={newTask.description}
-                onChange={e => setNewTask({...newTask, description: e.target.value})}
-              />
-              <button 
-                onClick={() => onAddTask(newTask)}
-                className="md:col-span-2 bg-emerald-600 text-white font-bold py-3 rounded-xl hover:bg-emerald-700"
-              >
-                Create Task
-              </button>
-            </div>
+              <div className="grid md:grid-cols-2 gap-4">
+                <input 
+                  type="text" 
+                  placeholder="Task Title" 
+                  className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3"
+                  value={newTask.title}
+                  onChange={e => setNewTask({...newTask, title: e.target.value})}
+                />
+                <input 
+                  type="number" 
+                  placeholder="Reward (₹)" 
+                  className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3"
+                  value={isNaN(newTask.reward) ? '' : newTask.reward}
+                  onChange={e => {
+                    const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                    setNewTask({...newTask, reward: val});
+                  }}
+                />
+                <input 
+                  type="number" 
+                  placeholder="Max Completions (0 for unlimited)" 
+                  className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3"
+                  value={newTask.maxCompletions === 0 ? '' : newTask.maxCompletions}
+                  onChange={e => {
+                    const val = e.target.value === '' ? 0 : parseInt(e.target.value);
+                    setNewTask({...newTask, maxCompletions: val});
+                  }}
+                />
+                <div className="md:col-span-1 flex items-center text-xs text-slate-500 px-2">
+                  <AlertCircle size={14} className="mr-1 text-amber-500" />
+                  Set to 0 for unlimited users.
+                </div>
+                <textarea 
+                  placeholder="Task Description" 
+                  className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 md:col-span-2"
+                  value={newTask.description}
+                  onChange={e => setNewTask({...newTask, description: e.target.value})}
+                />
+                <button 
+                  onClick={() => {
+                    onAddTask(newTask);
+                    setNewTask({ title: '', description: '', reward: 5, maxCompletions: 0 });
+                  }}
+                  className="md:col-span-2 bg-emerald-600 text-white font-bold py-3 rounded-xl hover:bg-emerald-700"
+                >
+                  Create Task
+                </button>
+              </div>
           </div>
 
           <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
@@ -428,6 +560,7 @@ export default function AdminPanel({
                 <tr>
                   <th className="px-6 py-4">Task</th>
                   <th className="px-6 py-4">Reward</th>
+                  <th className="px-6 py-4">Limit</th>
                   <th className="px-6 py-4">Actions</th>
                 </tr>
               </thead>
@@ -439,6 +572,16 @@ export default function AdminPanel({
                       <p className="text-xs text-slate-500">{task.description}</p>
                     </td>
                     <td className="px-6 py-4 font-bold text-emerald-600">₹{task.reward}</td>
+                    <td className="px-6 py-4">
+                      {task.maxCompletions && task.maxCompletions > 0 ? (
+                        <div className="flex flex-col">
+                          <span className="font-bold text-slate-900">{task.completionCount || 0} / {task.maxCompletions}</span>
+                          <span className="text-[10px] text-slate-400 uppercase">Limited</span>
+                        </div>
+                      ) : (
+                        <span className="text-slate-400 italic">Unlimited</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4">
                       <button 
                         onClick={() => {
@@ -493,10 +636,11 @@ export default function AdminPanel({
                     </a>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase ${
+                    <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase flex items-center w-fit ${
                       sub.status === 'pending' ? 'bg-amber-100 text-amber-700' : 
                       sub.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
                     }`}>
+                      {sub.status === 'approved' && <Check size={10} className="mr-1" />}
                       {sub.status}
                     </span>
                   </td>
@@ -505,7 +649,7 @@ export default function AdminPanel({
                       <>
                         <button 
                           onClick={() => onApproveTaskSubmission(sub)}
-                          className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100"
+                          className="p-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 shadow-sm shadow-emerald-200 transition-all active:scale-95"
                           title="Approve"
                         >
                           <Check size={16} />
@@ -532,6 +676,82 @@ export default function AdminPanel({
         </div>
       )}
 
+      {activeSubTab === 'payments' && (
+        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-widest text-[10px]">
+              <tr>
+                <th className="px-6 py-4">User</th>
+                <th className="px-6 py-4">Course</th>
+                <th className="px-6 py-4">Amount</th>
+                <th className="px-6 py-4">Proof</th>
+                <th className="px-6 py-4">Status</th>
+                <th className="px-6 py-4">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {payments.map(payment => (
+                <tr key={payment.id}>
+                  <td className="px-6 py-4">
+                    <p className="font-bold text-slate-900">{payment.userDisplayName || 'Unknown User'}</p>
+                    <p className="text-[10px] text-slate-400 font-mono">{payment.uid.substring(0, 8)}...</p>
+                  </td>
+                  <td className="px-6 py-4">
+                    <p className="font-bold text-slate-900">{courses.find(c => c.id === payment.courseId)?.title || 'Unknown Course'}</p>
+                    <p className="text-[10px] text-slate-400 font-mono">{payment.courseId}</p>
+                  </td>
+                  <td className="px-6 py-4 font-bold text-emerald-600">₹{payment.amount}</td>
+                  <td className="px-6 py-4">
+                    <a 
+                      href={payment.screenshotUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center text-emerald-600 hover:text-emerald-700 font-bold"
+                    >
+                      View Screenshot <ExternalLink size={12} className="ml-1" />
+                    </a>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase flex items-center w-fit ${
+                      payment.status === 'pending' ? 'bg-amber-100 text-amber-700' : 
+                      payment.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                    }`}>
+                      {payment.status === 'approved' && <Check size={10} className="mr-1" />}
+                      {payment.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 flex space-x-2">
+                    {payment.status === 'pending' && (
+                      <>
+                        <button 
+                          onClick={() => onApprovePayment(payment)}
+                          className="p-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 shadow-sm shadow-emerald-200 transition-all active:scale-95"
+                          title="Approve Payment"
+                        >
+                          <Check size={16} />
+                        </button>
+                        <button 
+                          onClick={() => onRejectPayment(payment.id)}
+                          className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100"
+                          title="Reject Payment"
+                        >
+                          <X size={16} />
+                        </button>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {payments.length === 0 && (
+            <div className="p-12 text-center text-slate-400">
+              No payment requests found.
+            </div>
+          )}
+        </div>
+      )}
+
       {activeSubTab === 'withdrawals' && (
         <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
           <table className="w-full text-left text-sm">
@@ -551,9 +771,11 @@ export default function AdminPanel({
                   <td className="px-6 py-4 font-bold text-slate-900">₹{req.amount}</td>
                   <td className="px-6 py-4 text-slate-500">{req.upiId}</td>
                   <td className="px-6 py-4">
-                    <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase ${
-                      req.status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+                    <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase flex items-center w-fit ${
+                      req.status === 'pending' ? 'bg-amber-100 text-amber-700' : 
+                      (req.status === 'successful' || req.status === 'approved') ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
                     }`}>
+                      {(req.status === 'successful' || req.status === 'approved') && <Check size={10} className="mr-1" />}
                       {req.status}
                     </span>
                   </td>
@@ -562,7 +784,8 @@ export default function AdminPanel({
                       <>
                         <button 
                           onClick={() => onApproveWithdrawal(req.id)}
-                          className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100"
+                          className="p-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 shadow-sm shadow-emerald-200 transition-all active:scale-95"
+                          title="Mark as Successful"
                         >
                           <Check size={16} />
                         </button>

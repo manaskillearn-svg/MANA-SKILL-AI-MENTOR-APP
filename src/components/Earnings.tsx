@@ -177,10 +177,11 @@ export default function Earnings({ user, earnings, withdrawals, onRequestWithdra
                     {new Date(req.timestamp?.toDate?.() || req.timestamp).toLocaleDateString()}
                   </p>
                 </div>
-                <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider ${
-                  req.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 
+                <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider flex items-center ${
+                  (req.status === 'successful' || req.status === 'approved') ? 'bg-emerald-100 text-emerald-700' : 
                   req.status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
                 }`}>
+                  {(req.status === 'successful' || req.status === 'approved') && <CheckCircle2 size={10} className="mr-1" />}
                   {req.status}
                 </span>
               </div>

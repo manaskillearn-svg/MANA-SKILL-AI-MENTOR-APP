@@ -49,7 +49,7 @@ export default function Dashboard({ user, tasks, courses, submissions, onSubmitT
           </div>
           <div>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Current Rank</p>
-            <p className="text-sm font-bold text-slate-900">{user.isPremium ? 'Premium Partner' : 'Free Member'}</p>
+            <p className="text-sm font-bold text-slate-900">{(user.unlockedCourses && user.unlockedCourses.length > 0) ? 'Premium Student' : 'Free Member'}</p>
           </div>
         </div>
       </section>
@@ -144,8 +144,17 @@ export default function Dashboard({ user, tasks, courses, submissions, onSubmitT
                         {task.title}
                       </h4>
                       <p className="text-sm text-slate-500">{task.description}</p>
-                      {status === 'pending' && <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Pending Approval</span>}
-                      {status === 'rejected' && <span className="text-[10px] font-bold text-red-600 uppercase tracking-wider">Rejected - Try Again</span>}
+                      <div className="flex items-center space-x-2 mt-1">
+                        {status === 'pending' && <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Pending Approval</span>}
+                        {status === 'rejected' && <span className="text-[10px] font-bold text-red-600 uppercase tracking-wider">Rejected - Try Again</span>}
+                        {task.maxCompletions && task.maxCompletions > 0 && (
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider ${
+                            (task.completionCount || 0) >= task.maxCompletions ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'
+                          }`}>
+                            {task.completionCount || 0}/{task.maxCompletions} Slots
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="flex flex-col items-end space-y-2">
@@ -153,9 +162,10 @@ export default function Dashboard({ user, tasks, courses, submissions, onSubmitT
                     {(status === 'none' || status === 'rejected') && (
                       <button 
                         onClick={() => setSubmittingTask(task)}
-                        className="bg-slate-900 text-white text-xs font-bold px-4 py-2 rounded-xl hover:bg-slate-800 transition-colors flex items-center"
+                        disabled={(task.maxCompletions || 0) > 0 && (task.completionCount || 0) >= (task.maxCompletions || 0)}
+                        className="bg-slate-900 text-white text-xs font-bold px-4 py-2 rounded-xl hover:bg-slate-800 transition-colors flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        Submit Proof
+                        {(task.maxCompletions || 0) > 0 && (task.completionCount || 0) >= (task.maxCompletions || 0) ? 'Task Full' : 'Submit Proof'}
                         <Camera size={14} className="ml-2" />
                       </button>
                     )}
@@ -217,9 +227,12 @@ export default function Dashboard({ user, tasks, courses, submissions, onSubmitT
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex items-center justify-between mb-2">
               <code className="text-xs font-bold text-slate-700">{user.referralCode}</code>
               <button 
-                onClick={() => {
+                onClick={(e) => {
                   navigator.clipboard.writeText(user.referralCode);
-                  alert('Referral code copied!');
+                  const btn = e.currentTarget;
+                  const originalText = btn.innerText;
+                  btn.innerText = 'Copied!';
+                  setTimeout(() => { btn.innerText = originalText; }, 2000);
                 }}
                 className="text-xs font-bold text-emerald-600 hover:text-emerald-700"
               >
