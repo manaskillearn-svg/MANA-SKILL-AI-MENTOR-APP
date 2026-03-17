@@ -1,19 +1,54 @@
 import React, { useState } from 'react';
-import { motion } from 'motion/react';
-import { LogIn, GraduationCap, TrendingUp, ShieldCheck, UserPlus } from 'lucide-react';
-import { signInWithPopup, googleProvider, auth } from '../firebase';
+import { motion, AnimatePresence } from 'motion/react';
+import { LogIn, GraduationCap, TrendingUp, ShieldCheck, UserPlus, Mail, Lock, User, ArrowRight } from 'lucide-react';
+import { auth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from '../firebase';
 
 export default function Auth() {
+  const [isLogin, setIsLogin] = useState(true);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [referralCode, setReferralCode] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
     try {
       if (referralCode.trim()) {
         localStorage.setItem('pendingReferralCode', referralCode.trim().toUpperCase());
       }
-      await signInWithPopup(auth, googleProvider);
-    } catch (error) {
-      console.error("Login failed:", error);
+
+      if (isLogin) {
+        await signInWithEmailAndPassword(auth, email, password);
+      } else {
+        if (!displayName.trim()) {
+          throw new Error('Please enter your name');
+        }
+        // Store display name temporarily to be used in App.tsx profile creation
+        localStorage.setItem('pendingDisplayName', displayName.trim());
+        await createUserWithEmailAndPassword(auth, email, password);
+      }
+    } catch (err: any) {
+      console.error("Auth failed:", err);
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+        setError('Invalid email or password. Please check your credentials.');
+      } else if (err.code === 'auth/email-already-in-use') {
+        setError('This email is already registered. Try logging in instead.');
+      } else if (err.code === 'auth/weak-password') {
+        setError('Password should be at least 6 characters long.');
+      } else if (err.code === 'auth/operation-not-allowed') {
+        setError('Email/Password login is not enabled in Firebase. Please enable it in the Firebase Console under Authentication > Sign-in method.');
+      } else if (err.code === 'auth/too-many-requests') {
+        setError('Too many failed attempts. Please try again later.');
+      } else {
+        setError(err.message || 'Authentication failed. Please try again.');
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -38,48 +73,129 @@ export default function Auth() {
           <p className="text-slate-400">Learn Skills, Earn Money, Build Your Future.</p>
         </div>
 
-        <div className="space-y-4 mb-8">
-          <div className="flex items-start space-x-3 text-slate-300">
-            <div className="mt-1 text-emerald-400"><TrendingUp size={18} /></div>
-            <div>
-              <p className="font-medium text-white">Learn High-Income Skills</p>
-              <p className="text-sm text-slate-400">Instagram, Affiliate Marketing & more.</p>
-            </div>
-          </div>
-          <div className="flex items-start space-x-3 text-slate-300">
-            <div className="mt-1 text-emerald-400"><ShieldCheck size={18} /></div>
-            <div>
-              <p className="font-medium text-white">Safe & Verified Methods</p>
-              <p className="text-sm text-slate-400">No scams, only real step-by-step guidance.</p>
-            </div>
-          </div>
+        <div className="flex bg-white/5 p-1 rounded-2xl mb-8 border border-white/10">
+          <button 
+            onClick={() => setIsLogin(true)}
+            className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all ${isLogin ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'text-slate-400 hover:text-white'}`}
+          >
+            Login
+          </button>
+          <button 
+            onClick={() => setIsLogin(false)}
+            className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all ${!isLogin ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'text-slate-400 hover:text-white'}`}
+          >
+            Sign Up
+          </button>
         </div>
 
-        <div className="mb-6">
-          <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 px-1">
-            Referral Code (Optional)
-          </label>
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
-              <UserPlus size={18} />
-            </div>
-            <input 
-              type="text" 
-              placeholder="Enter Code" 
-              className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 pl-11 pr-4 text-white placeholder:text-slate-600 focus:outline-none focus:border-emerald-500/50 transition-colors uppercase"
-              value={referralCode}
-              onChange={(e) => setReferralCode(e.target.value)}
-            />
-          </div>
-        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <AnimatePresence mode="wait">
+            {!isLogin && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="space-y-2"
+              >
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest px-1">
+                  Full Name
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
+                    <User size={18} />
+                  </div>
+                  <input 
+                    type="text" 
+                    placeholder="Enter your name" 
+                    required={!isLogin}
+                    className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 pl-11 pr-4 text-white placeholder:text-slate-600 focus:outline-none focus:border-emerald-500/50 transition-colors"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                  />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-        <button
-          onClick={handleLogin}
-          className="w-full flex items-center justify-center space-x-3 bg-white text-slate-950 font-bold py-4 rounded-2xl hover:bg-slate-100 transition-all duration-200 active:scale-[0.98]"
-        >
-          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
-          <span>Continue with Google</span>
-        </button>
+          <div className="space-y-2">
+            <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest px-1">
+              Email Address
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
+                <Mail size={18} />
+              </div>
+              <input 
+                type="email" 
+                placeholder="email@example.com" 
+                required
+                className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 pl-11 pr-4 text-white placeholder:text-slate-600 focus:outline-none focus:border-emerald-500/50 transition-colors"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest px-1">
+              Password
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
+                <Lock size={18} />
+              </div>
+              <input 
+                type="password" 
+                placeholder="••••••••" 
+                required
+                className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 pl-11 pr-4 text-white placeholder:text-slate-600 focus:outline-none focus:border-emerald-500/50 transition-colors"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {!isLogin && (
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest px-1">
+                Referral Code (Optional)
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
+                  <UserPlus size={18} />
+                </div>
+                <input 
+                  type="text" 
+                  placeholder="Enter Code" 
+                  className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 pl-11 pr-4 text-white placeholder:text-slate-600 focus:outline-none focus:border-emerald-500/50 transition-colors uppercase"
+                  value={referralCode}
+                  onChange={(e) => setReferralCode(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium text-center">
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full flex items-center justify-center space-x-3 bg-emerald-500 text-white font-bold py-4 rounded-2xl hover:bg-emerald-600 transition-all duration-200 active:scale-[0.98] shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+          >
+            {loading ? (
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <>
+                <span>{isLogin ? 'Login to Account' : 'Create Account'}</span>
+                <ArrowRight size={18} />
+              </>
+            )}
+          </button>
+        </form>
 
         <p className="text-center text-xs text-slate-500 mt-6">
           By continuing, you agree to our Terms of Service and Privacy Policy.

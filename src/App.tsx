@@ -140,11 +140,12 @@ export default function App() {
               }
             }
 
+            const pendingDisplayName = localStorage.getItem('pendingDisplayName');
             const newProfile: UserProfile = {
               uid: firebaseUser.uid,
               email: firebaseUser.email || '',
-              displayName: firebaseUser.displayName || 'Student',
-              photoURL: firebaseUser.photoURL || '',
+              displayName: pendingDisplayName || firebaseUser.displayName || 'Student',
+              photoURL: firebaseUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(pendingDisplayName || firebaseUser.displayName || 'Student')}&background=random`,
               role: firebaseUser.email === 'manaskill.earn@gmail.com' ? 'admin' : 'student',
               earnings: 0,
               referralCode: Math.random().toString(36).substring(2, 8).toUpperCase(),
@@ -157,6 +158,7 @@ export default function App() {
             };
             await setDoc(doc(db, 'users', firebaseUser.uid), newProfile);
             setUser(newProfile);
+            localStorage.removeItem('pendingDisplayName');
           }
         } catch (error) {
           console.error("App: Error in auth listener", error);
