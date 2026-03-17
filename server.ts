@@ -1,34 +1,10 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
-import { fileURLToPath } from "url";
-import dotenv from "dotenv";
-
-dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import app from "./src/server/app";
 
 async function startServer() {
-  const app = express();
   const PORT = 3000;
-
-  app.use(express.json());
-
-  // API Routes
-  
-  // Check Configuration Status (for Admin)
-  app.get("/api/admin/config-status", (req, res) => {
-    res.json({
-      gemini: {
-        apiKey: !!process.env.GEMINI_API_KEY
-      },
-      upi: {
-        id: !!process.env.VITE_ADMIN_UPI_ID,
-        name: !!process.env.VITE_ADMIN_UPI_NAME
-      }
-    });
-  });
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
