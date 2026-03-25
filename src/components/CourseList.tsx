@@ -6,12 +6,20 @@ import { Course, UserProfile } from '../types';
 interface CourseListProps {
   courses: Course[];
   user: UserProfile;
+  payments: any[];
   onSelectCourse: (course: Course) => void;
   onPurchaseCourse: (course: Course) => void; // Added prop
   onManageLessons?: (courseId: string) => void;
 }
 
-export default function CourseList({ courses, user, onSelectCourse, onPurchaseCourse, onManageLessons }: CourseListProps) {
+export default function CourseList({ courses, user, payments, onSelectCourse, onPurchaseCourse, onManageLessons }: CourseListProps) {
+  const getCourseStatus = (courseId: string) => {
+    if (user.unlockedCourses && user.unlockedCourses.includes(courseId)) return 'unlocked';
+    const pendingPayment = payments.find(p => p.courseId === courseId && p.status === 'pending');
+    if (pendingPayment) return 'pending';
+    return 'locked';
+  };
+
   return (
     <div className="space-y-8">
       <section className="flex justify-between items-end">
@@ -41,11 +49,19 @@ export default function CourseList({ courses, user, onSelectCourse, onPurchaseCo
                 className="w-full h-full object-cover"
                 referrerPolicy="no-referrer"
               />
-              {!course.isFree && !(user.unlockedCourses && user.unlockedCourses.includes(course.id)) && (
+              {!course.isFree && getCourseStatus(course.id) === 'locked' && (
                 <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[2px] flex items-center justify-center">
                   <div className="bg-white/20 backdrop-blur-md border border-white/30 rounded-full p-3 text-white">
                     <Lock size={24} />
                   </div>
+                </div>
+              )}
+              {getCourseStatus(course.id) === 'pending' && (
+                <div className="absolute inset-0 bg-amber-900/60 backdrop-blur-[2px] flex flex-col items-center justify-center text-white p-4 text-center">
+                  <div className="bg-amber-500/20 backdrop-blur-md border border-amber-500/30 rounded-full p-3 mb-2">
+                    <Clock size={24} />
+                  </div>
+                  <p className="text-xs font-bold uppercase tracking-widest">Pending Approval</p>
                 </div>
               )}
               {course.isFree && (
@@ -87,22 +103,31 @@ export default function CourseList({ courses, user, onSelectCourse, onPurchaseCo
                 
                 <button
                   onClick={() => {
-                    if (course.isFree || (user.unlockedCourses && user.unlockedCourses.includes(course.id))) {
+                    const status = getCourseStatus(course.id);
+                    if (course.isFree || status === 'unlocked') {
                       onSelectCourse(course);
-                    } else {
+                    } else if (status === 'locked') {
                       onPurchaseCourse(course);
                     }
                   }}
+                  disabled={getCourseStatus(course.id) === 'pending'}
                   className={`px-4 py-2 rounded-xl font-bold text-sm transition-all ${
-                    course.isFree || (user.unlockedCourses && user.unlockedCourses.includes(course.id))
+                    course.isFree || getCourseStatus(course.id) === 'unlocked'
                       ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                      : getCourseStatus(course.id) === 'pending'
+                      ? 'bg-amber-100 text-amber-600 cursor-not-allowed'
                       : 'bg-slate-100 text-slate-900 hover:bg-slate-200'
                   }`}
                 >
-                  {course.isFree || (user.unlockedCourses && user.unlockedCourses.includes(course.id)) ? (
+                  {course.isFree || getCourseStatus(course.id) === 'unlocked' ? (
                     <div className="flex items-center">
                       <Play size={14} className="mr-2 fill-current" />
                       Start Learning
+                    </div>
+                  ) : getCourseStatus(course.id) === 'pending' ? (
+                    <div className="flex items-center">
+                      <Clock size={14} className="mr-2" />
+                      Pending Approval
                     </div>
                   ) : (
                     `Unlock for ₹${course.price}`

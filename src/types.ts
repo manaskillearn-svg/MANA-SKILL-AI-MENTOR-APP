@@ -10,6 +10,7 @@ export interface UserProfile {
   referralCode: string;
   referredBy?: string;
   completedLessons: string[];
+  completedCourses: string[];
   completedTasks: string[];
   unlockedCourses: string[];
   isPremium: boolean;

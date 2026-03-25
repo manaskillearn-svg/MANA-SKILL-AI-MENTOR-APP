@@ -45,8 +45,8 @@ export default function AIMentor() {
       {/* Header */}
       <div className="p-4 border-b border-slate-50 bg-slate-50/50 flex items-center justify-between">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center text-white shadow-lg shadow-emerald-200">
-            <Bot size={24} />
+          <div className="w-12 h-12 rounded-xl bg-emerald-600 flex items-center justify-center text-white shadow-lg shadow-emerald-200 overflow-hidden">
+            <img src="https://i.ibb.co/Xxm7bhyc/IMG-20260324-233115.png" alt="Mana Skill AI Mentor Logo" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
           </div>
           <div>
             <h3 className="font-bold text-slate-900">Mana Skill Mentor</h3>

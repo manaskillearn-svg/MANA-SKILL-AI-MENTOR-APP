@@ -66,8 +66,8 @@ export default function Auth() {
         className="w-full max-w-md bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-2xl relative z-10"
       >
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-emerald-500/10 text-emerald-400 mb-4 border border-emerald-500/20">
-            <GraduationCap size={32} />
+          <div className="inline-flex items-center justify-center w-24 h-24 rounded-3xl bg-emerald-500/10 mb-4 border border-emerald-500/20 overflow-hidden">
+            <img src="https://i.ibb.co/Xxm7bhyc/IMG-20260324-233115.png" alt="Mana Skill AI Mentor Logo" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
           </div>
           <h1 className="text-3xl font-bold text-white mb-2">Mana Skill</h1>
           <p className="text-slate-400">Learn Skills, Earn Money, Build Your Future.</p>

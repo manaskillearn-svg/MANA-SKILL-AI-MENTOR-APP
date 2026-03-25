@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { ShieldCheck, Plus, Check, X, Users, BookOpen, Wallet, LayoutDashboard, Sparkles, ArrowLeft, Play, Camera, ExternalLink, AlertCircle } from 'lucide-react';
-import { Course, DailyTask, WithdrawalRequest, Lesson, TaskSubmission, PaymentRequest } from '../types';
+import { Course, DailyTask, WithdrawalRequest, Lesson, TaskSubmission, PaymentRequest, UserProfile } from '../types';
 import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 
@@ -12,7 +12,7 @@ interface AdminPanelProps {
   payments: PaymentRequest[];
   lessons: Lesson[];
   initialSubTab?: string;
-  initialCourseId?: string | null; // Added optional prop
+  initialCourseId?: string | null;
   onAddCourse: (course: Partial<Course>) => void;
   onUpdateCourse: (id: string, course: Partial<Course>) => void;
   onAddTask: (task: Partial<DailyTask>) => void;
@@ -24,6 +24,7 @@ interface AdminPanelProps {
   onSelectCourseForLessons: (courseId: string | null) => void;
   onApproveTaskSubmission: (submission: TaskSubmission) => void;
   onRejectTaskSubmission: (submissionId: string) => void;
+  onUpdateUserEarnings: (userId: string, amount: number) => void;
 }
 
 export default function AdminPanel({ 
@@ -33,7 +34,7 @@ export default function AdminPanel({
   payments,
   lessons,
   initialSubTab = 'stats',
-  initialCourseId = null, // Default value
+  initialCourseId = null,
   onAddCourse, 
   onUpdateCourse,
   onAddTask, 
@@ -44,7 +45,8 @@ export default function AdminPanel({
   onRejectPayment,
   onSelectCourseForLessons,
   onApproveTaskSubmission,
-  onRejectTaskSubmission
+  onRejectTaskSubmission,
+  onUpdateUserEarnings
 }: AdminPanelProps) {
   const [activeSubTab, setActiveSubTab] = useState(initialSubTab);
   const [newCourse, setNewCourse] = useState({ title: '', description: '', price: 0, category: 'Marketing', isFree: true, thumbnail: '' });
@@ -53,7 +55,11 @@ export default function AdminPanel({
   const [editingLessonsFor, setEditingLessonsFor] = useState<string | null>(initialCourseId);
   const [newLesson, setNewLesson] = useState({ title: '', videoUrl: '', taskDescription: '', order: 1 });
   const [allSubmissions, setAllSubmissions] = useState<TaskSubmission[]>([]);
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+  const [searchUser, setSearchUser] = useState('');
+  const [adjustAmount, setAdjustAmount] = useState<{[key: string]: number}>({});
   const [configStatus, setConfigStatus] = useState<any>(null);
+  const [seedStatus, setSeedStatus] = useState('');
 
   // Fetch config status
   useEffect(() => {
@@ -80,8 +86,18 @@ export default function AdminPanel({
     return () => unsub();
   }, []);
 
+  // Fetch all users for admin
+  useEffect(() => {
+    const unsub = onSnapshot(
+      collection(db, 'users'),
+      (snap) => {
+        setAllUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() } as UserProfile)));
+      }
+    );
+    return () => unsub();
+  }, []);
+
   const handleSeedData = async () => {
-    // Sample Courses
     const sampleCourses = [
       { id: 'insta-mastery', title: 'Instagram Marketing Mastery', description: 'Learn how to grow and monetize your Instagram account from scratch.', price: 99, category: 'Marketing', isFree: false },
       { id: 'affiliate-beg', title: 'Affiliate Marketing for Beginners', description: 'Start earning commissions by promoting products you love.', price: 0, category: 'Earning', isFree: true },
@@ -93,7 +109,6 @@ export default function AdminPanel({
       await onAddCourse(data);
     }
 
-    // Sample Tasks
     const sampleTasks = [
       { title: 'Watch 1 Lesson', description: 'Complete any one lesson from your enrolled courses.', reward: 10 },
       { title: 'Share Referral Link', description: 'Share your referral link on WhatsApp or Instagram.', reward: 5 },
@@ -107,8 +122,6 @@ export default function AdminPanel({
     setSeedStatus('Sample data seeded successfully!');
     setTimeout(() => setSeedStatus(''), 3000);
   };
-
-  const [seedStatus, setSeedStatus] = useState('');
 
   const handleAddLesson = () => {
     if (!editingLessonsFor) return;
@@ -156,6 +169,7 @@ export default function AdminPanel({
           { id: 'courses', label: 'Courses', icon: BookOpen },
           { id: 'tasks', label: 'Tasks', icon: Check },
           { id: 'submissions', label: 'Submissions', icon: Camera },
+          { id: 'users', label: 'Users', icon: Users },
           { id: 'payments', label: 'Payments', icon: Wallet },
           { id: 'withdrawals', label: 'Payouts', icon: Wallet },
         ].map((tab) => (
@@ -180,7 +194,7 @@ export default function AdminPanel({
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Total Users</p>
-              <p className="text-3xl font-bold text-slate-900">1,248</p>
+              <p className="text-3xl font-bold text-slate-900">{allUsers.length}</p>
             </div>
             <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Pending Payments</p>
@@ -270,7 +284,7 @@ export default function AdminPanel({
                 <span className="font-bold text-sm text-slate-700">Review Payouts</span>
               </button>
               <button 
-                onClick={() => setSeedStatus('User management coming soon!')}
+                onClick={() => setActiveSubTab('users')}
                 className="flex flex-col items-center justify-center p-6 rounded-2xl border border-slate-100 hover:border-emerald-200 hover:bg-emerald-50 transition-all group"
               >
                 <div className="w-12 h-12 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
@@ -673,6 +687,87 @@ export default function AdminPanel({
               No task submissions found.
             </div>
           )}
+        </div>
+      )}
+
+      {activeSubTab === 'users' && (
+        <div className="space-y-6">
+          <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex justify-between items-center">
+            <div className="relative flex-1 max-w-md">
+              <input 
+                type="text" 
+                placeholder="Search users by name or email..." 
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 pl-10 text-sm"
+                value={searchUser}
+                onChange={e => setSearchUser(e.target.value)}
+              />
+              <Users className="absolute left-3 top-2.5 text-slate-400" size={18} />
+            </div>
+            <div className="text-xs font-bold text-slate-400">
+              Total: {allUsers.length} Users
+            </div>
+          </div>
+
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-widest text-[10px]">
+                <tr>
+                  <th className="px-6 py-4">User</th>
+                  <th className="px-6 py-4">Email</th>
+                  <th className="px-6 py-4">Balance</th>
+                  <th className="px-6 py-4">Adjust Balance</th>
+                  <th className="px-6 py-4">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {allUsers
+                  .filter(u => 
+                    (u.displayName || '').toLowerCase().includes(searchUser.toLowerCase()) || 
+                    (u.email || '').toLowerCase().includes(searchUser.toLowerCase())
+                  )
+                  .map(u => (
+                  <tr key={u.uid}>
+                    <td className="px-6 py-4">
+                      <p className="font-bold text-slate-900">{u.displayName}</p>
+                      <p className="text-[10px] text-slate-400 font-mono">{u.uid}</p>
+                    </td>
+                    <td className="px-6 py-4 text-slate-600">{u.email}</td>
+                    <td className="px-6 py-4">
+                      <span className={`font-bold ${(u.earnings || 0) < 0 ? 'text-red-500' : 'text-emerald-600'}`}>
+                        ₹{u.earnings || 0}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center space-x-2">
+                        <input 
+                          type="number" 
+                          placeholder="Amount" 
+                          className="w-24 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs"
+                          value={adjustAmount[u.uid] || ''}
+                          onChange={e => setAdjustAmount({...adjustAmount, [u.uid]: parseFloat(e.target.value)})}
+                        />
+                        <button 
+                          onClick={() => {
+                            const amt = adjustAmount[u.uid];
+                            if (amt && !isNaN(amt)) {
+                              onUpdateUserEarnings(u.uid, amt);
+                              setAdjustAmount({...adjustAmount, [u.uid]: 0});
+                            }
+                          }}
+                          className="bg-emerald-600 text-white px-3 py-1 rounded-lg text-xs font-bold hover:bg-emerald-700"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <button className="text-xs font-bold text-blue-600 hover:underline">View Profile</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

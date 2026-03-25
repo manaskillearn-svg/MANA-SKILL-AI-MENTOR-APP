@@ -29,10 +29,15 @@ export default function Layout({ children, activeTab, setActiveTab, user, onLogo
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex flex-col fixed left-0 top-0 bottom-0 w-64 bg-white border-r border-slate-200 z-30">
         <div className="p-6">
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
-            Mana Skill
-          </h1>
-          <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mt-1">AI Mentor</p>
+          <div className="flex items-center space-x-3 mb-2">
+            <div className="w-10 h-10 rounded-xl bg-emerald-600 overflow-hidden shadow-lg shadow-emerald-100">
+              <img src="https://i.ibb.co/Xxm7bhyc/IMG-20260324-233115.png" alt="Logo" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+            </div>
+            <h1 className="text-xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+              Mana Skill
+            </h1>
+          </div>
+          <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">AI Mentor</p>
         </div>
 
         <nav className="flex-1 px-4 space-y-1">
@@ -65,9 +70,14 @@ export default function Layout({ children, activeTab, setActiveTab, user, onLogo
 
       {/* Mobile Header */}
       <header className="md:hidden sticky top-0 bg-white/80 backdrop-blur-md border-b border-slate-200 z-30 px-4 py-3 flex justify-between items-center">
-        <h1 className="text-xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
-          Mana Skill
-        </h1>
+        <div className="flex items-center space-x-2">
+          <div className="w-8 h-8 rounded-lg bg-emerald-600 overflow-hidden">
+            <img src="https://i.ibb.co/Xxm7bhyc/IMG-20260324-233115.png" alt="Logo" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+          </div>
+          <h1 className="text-xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+            Mana Skill
+          </h1>
+        </div>
         <div className="flex items-center space-x-3">
           {user?.photoURL && (
             <img src={user.photoURL} alt="Profile" className="w-8 h-8 rounded-full border border-slate-200" referrerPolicy="no-referrer" />

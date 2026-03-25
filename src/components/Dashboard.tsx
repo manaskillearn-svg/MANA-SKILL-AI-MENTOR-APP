@@ -8,13 +8,17 @@ interface DashboardProps {
   tasks: DailyTask[];
   courses: Course[];
   submissions: TaskSubmission[];
+  payments: any[];
   onSubmitTaskProof: (taskId: string, taskTitle: string, reward: number, proofUrl: string) => void;
   onViewCourse: (courseId: string) => void;
+  onShowCertificate: (course: Course) => void;
 }
 
-export default function Dashboard({ user, tasks, courses, submissions, onSubmitTaskProof, onViewCourse }: DashboardProps) {
+export default function Dashboard({ user, tasks, courses, submissions, payments, onSubmitTaskProof, onViewCourse, onShowCertificate }: DashboardProps) {
   const [submittingTask, setSubmittingTask] = useState<DailyTask | null>(null);
   const [proofUrl, setProofUrl] = useState('');
+
+  const pendingPayments = payments.filter(p => p.status === 'pending');
 
   const completedCount = user.completedLessons?.length || 0;
   const progress = (completedCount / 10) * 100; // Mock total lessons for now
@@ -104,6 +108,82 @@ export default function Dashboard({ user, tasks, courses, submissions, onSubmitT
           </div>
         </div>
       </div>
+
+      {pendingPayments.length > 0 && (
+        <section className="bg-amber-50 border border-amber-100 rounded-[2.5rem] p-8">
+          <div className="flex items-center space-x-3 mb-6">
+            <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center">
+              <Clock size={24} />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-slate-900">Pending Course Approvals</h3>
+              <p className="text-sm text-slate-500">We're verifying your payment. This usually takes 1-2 hours.</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {pendingPayments.map(payment => (
+              <div key={payment.id} className="bg-white p-4 rounded-2xl border border-amber-200 shadow-sm flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400">
+                    <BookOpen size={20} />
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-900 text-sm">{payment.courseTitle}</p>
+                    <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">Verifying ₹{payment.amount}</p>
+                  </div>
+                </div>
+                <div className="w-8 h-8 rounded-full border-2 border-amber-200 border-t-amber-500 animate-spin" />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {user.completedCourses && user.completedCourses.length > 0 && (
+        <section className="bg-emerald-50 border border-emerald-100 rounded-[2.5rem] p-8">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center space-x-3">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                <Award size={24} />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-slate-900">My Certificates</h3>
+                <p className="text-sm text-slate-500">You've earned these certifications through hard work.</p>
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {user.completedCourses.map(courseId => {
+              const course = courses.find(c => c.id === courseId);
+              if (!course) return null;
+              return (
+                <motion.div 
+                  key={courseId}
+                  whileHover={{ scale: 1.02 }}
+                  className="bg-white p-6 rounded-3xl border border-emerald-200 shadow-sm flex flex-col justify-between"
+                >
+                  <div className="flex items-center space-x-4 mb-4">
+                    <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-100">
+                      <Star size={24} className="fill-current" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-bold text-slate-900 truncate">{course.title}</h4>
+                      <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Certified Graduate</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => onShowCertificate(course)}
+                    className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all flex items-center justify-center space-x-2"
+                  >
+                    <Award size={16} />
+                    <span>View Certificate</span>
+                  </button>
+                </motion.div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Daily Tasks */}

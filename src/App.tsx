@@ -12,6 +12,7 @@ import AdminPanel from './components/AdminPanel';
 import { Loader2, Sparkles, CreditCard } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { UPIPayment } from './components/UPIPayment';
+import Certificate from './components/Certificate';
 
 enum OperationType {
   CREATE = 'create',
@@ -80,6 +81,8 @@ export default function App() {
   const [courseLessons, setCourseLessons] = useState<Lesson[]>([]);
   const [adminSelectedCourseId, setAdminSelectedCourseId] = useState<string | null>(null);
   const [adminLessons, setAdminLessons] = useState<Lesson[]>([]);
+  const [showCertificate, setShowCertificate] = useState(false);
+  const [courseForCertificate, setCourseForCertificate] = useState<Course | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
@@ -124,7 +127,12 @@ export default function App() {
                   referredByUid = referrerDoc.id;
                   const referrerData = referrerDoc.data() as UserProfile;
 
-                  // Reward referrer with ₹5 for the join (via earnings collection only)
+                  // Reward referrer with ₹5 for the join
+                  const referrerRef = doc(db, 'users', referredByUid);
+                  await updateDoc(referrerRef, {
+                    earnings: increment(5)
+                  });
+
                   await addDoc(collection(db, 'earnings'), {
                     uid: referredByUid,
                     amount: 5,
@@ -151,6 +159,7 @@ export default function App() {
               referralCode: Math.random().toString(36).substring(2, 8).toUpperCase(),
               referredBy: referredByUid,
               completedLessons: [],
+              completedCourses: [],
               completedTasks: [],
               unlockedCourses: [],
               isPremium: false,
@@ -238,27 +247,6 @@ export default function App() {
     };
   }, [user?.uid]);
 
-  // Earnings Reconciliation: Sync user.earnings field with the sum of the earnings collection
-  useEffect(() => {
-    if (!user || earnings.length === 0) return;
-
-    const totalCalculated = earnings.reduce((sum, record) => sum + record.amount, 0);
-    
-    // We also need to account for withdrawals (which are negative earnings in the total balance)
-    const totalWithdrawn = withdrawals
-      .filter(w => w.status !== 'rejected')
-      .reduce((sum, w) => sum + w.amount, 0);
-    
-    const currentBalance = totalCalculated - totalWithdrawn;
-
-    if (user.earnings !== currentBalance) {
-      console.log(`Reconciling earnings: ${user.earnings} -> ${currentBalance}`);
-      updateDoc(doc(db, 'users', user.uid), {
-        earnings: currentBalance
-      }).catch(err => console.error("Failed to reconcile earnings:", err));
-    }
-  }, [earnings, withdrawals, user?.uid]);
-
   // Fetch lessons when course is selected
   useEffect(() => {
     if (!selectedCourse) {
@@ -318,7 +306,7 @@ export default function App() {
 
     await updateDoc(doc(db, 'users', userId), {
       completedTasks: newCompletedTasks,
-      earnings: newEarnings
+      earnings: increment(reward)
     });
 
     await addDoc(collection(db, 'earnings'), {
@@ -388,14 +376,31 @@ export default function App() {
     await updateDoc(doc(db, 'taskSubmissions', submissionId), { status: 'rejected' });
   };
 
-  const handleCompleteLesson = async (lessonId: string) => {
+  const handleCompleteLesson = async (lessonId: string, courseId: string) => {
     if (!user) return;
     if (user.completedLessons.includes(lessonId)) return;
 
     const newCompletedLessons = [...user.completedLessons, lessonId];
-    await updateDoc(doc(db, 'users', user.uid), {
+    const updates: any = {
       completedLessons: newCompletedLessons
-    });
+    };
+
+    // Check if all lessons for this course are now completed
+    if (courseLessons.length > 0) {
+      const allLessonsCompleted = courseLessons.every(l => 
+        l.id === lessonId || user.completedLessons.includes(l.id)
+      );
+      
+      if (allLessonsCompleted) {
+        const completedCourses = user.completedCourses || [];
+        if (!completedCourses.includes(courseId)) {
+          updates.completedCourses = [...completedCourses, courseId];
+          showToast('Congratulations! You have completed the course and earned a certificate.', 'success');
+        }
+      }
+    }
+
+    await updateDoc(doc(db, 'users', user.uid), updates);
   };
 
   const handlePurchaseCourse = async (course: Course) => {
@@ -425,9 +430,16 @@ export default function App() {
 
           // 3. Reward referrer if applicable
           if (userData.referredBy) {
+            const commission = Math.floor(payment.amount * 0.1);
+            const referrerRef = doc(db, 'users', userData.referredBy);
+            
+            await updateDoc(referrerRef, {
+              earnings: increment(commission)
+            });
+
             await addDoc(collection(db, 'earnings'), {
               uid: userData.referredBy,
-              amount: Math.floor(payment.amount * 0.1), // 10% commission
+              amount: commission,
               type: 'sale',
               description: `Commission for ${userData.displayName}'s purchase of ${payment.courseTitle}`,
               timestamp: serverTimestamp()
@@ -458,7 +470,7 @@ export default function App() {
     });
 
     await updateDoc(doc(db, 'users', user.uid), {
-      earnings: user.earnings - amount
+      earnings: increment(-amount)
     });
   };
 
@@ -496,12 +508,22 @@ export default function App() {
 
     await updateDoc(doc(db, 'withdrawals', id), { status: 'rejected' });
     // Refund user
-    const userDoc = await getDoc(doc(db, 'users', withdrawal.uid));
-    if (userDoc.exists()) {
-      const userData = userDoc.data() as UserProfile;
-      await updateDoc(doc(db, 'users', withdrawal.uid), {
-        earnings: userData.earnings + withdrawal.amount
+    await updateDoc(doc(db, 'users', withdrawal.uid), {
+      earnings: increment(withdrawal.amount)
+    });
+  };
+
+  const handleUpdateUserEarnings = async (userId: string, amount: number) => {
+    try {
+      await updateDoc(doc(db, 'users', userId), {
+        earnings: increment(amount)
       });
+      setToast({ type: 'success', message: `Successfully adjusted balance by ₹${amount}` });
+      setTimeout(() => setToast(null), 3000);
+    } catch (error) {
+      console.error('Error updating user earnings:', error);
+      setToast({ type: 'error', message: 'Failed to update user balance' });
+      setTimeout(() => setToast(null), 3000);
     }
   };
 
@@ -556,13 +578,27 @@ export default function App() {
           }}
         />
       )}
+      {showCertificate && courseForCertificate && user && (
+        <Certificate 
+          user={user}
+          course={courseForCertificate}
+          onClose={() => {
+            setShowCertificate(false);
+            setCourseForCertificate(null);
+          }}
+        />
+      )}
       {selectedCourse ? (
         <LessonView 
           course={selectedCourse} 
           lessons={courseLessons} 
           user={user} 
           onBack={() => setSelectedCourse(null)} 
-          onCompleteLesson={handleCompleteLesson}
+          onCompleteLesson={(lessonId) => handleCompleteLesson(lessonId, selectedCourse.id)}
+          onShowCertificate={() => {
+            setCourseForCertificate(selectedCourse);
+            setShowCertificate(true);
+          }}
         />
       ) : (
         <>
@@ -572,6 +608,7 @@ export default function App() {
               tasks={tasks} 
               courses={courses} 
               submissions={submissions}
+              payments={payments}
               onSubmitTaskProof={handleSubmitTaskProof} 
               onViewCourse={(id) => {
                 if (id === 'featured' && courses.length > 0) {
@@ -580,12 +617,17 @@ export default function App() {
                   setActiveTab('courses');
                 }
               }}
+              onShowCertificate={(course) => {
+                setCourseForCertificate(course);
+                setShowCertificate(true);
+              }}
             />
           )}
           {activeTab === 'courses' && (
             <CourseList 
               courses={courses} 
               user={user} 
+              payments={payments}
               onSelectCourse={setSelectedCourse} 
               onPurchaseCourse={handlePurchaseCourse}
               onManageLessons={(courseId) => {
@@ -655,6 +697,7 @@ export default function App() {
               onRejectTaskSubmission={handleRejectTaskSubmission}
               onApprovePayment={handleApprovePayment}
               onRejectPayment={handleRejectPayment}
+              onUpdateUserEarnings={handleUpdateUserEarnings}
             />
           )}
         </>
