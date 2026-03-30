@@ -9,10 +9,9 @@ interface LessonViewProps {
   user: UserProfile;
   onBack: () => void;
   onCompleteLesson: (lessonId: string) => void;
-  onShowCertificate: () => void;
 }
 
-export default function LessonView({ course, lessons, user, onBack, onCompleteLesson, onShowCertificate }: LessonViewProps) {
+export default function LessonView({ course, lessons, user, onBack, onCompleteLesson }: LessonViewProps) {
   const [currentLessonIndex, setCurrentLessonIndex] = useState(0);
   const currentLesson = lessons[currentLessonIndex];
 
@@ -65,30 +64,6 @@ export default function LessonView({ course, lessons, user, onBack, onCompleteLe
       <div className="grid lg:grid-cols-3 gap-8">
         {/* Video Player Area */}
         <div className="lg:col-span-2 space-y-6">
-          {allLessonsCompleted && (
-            <motion.div 
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-gradient-to-r from-amber-500 to-amber-600 p-6 rounded-3xl text-white shadow-lg shadow-amber-200 flex items-center justify-between"
-            >
-              <div className="flex items-center space-x-4">
-                <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
-                  <CheckCircle2 size={24} />
-                </div>
-                <div>
-                  <h4 className="font-bold text-lg">Course Completed!</h4>
-                  <p className="text-amber-50 text-sm">You've mastered all lessons in this course.</p>
-                </div>
-              </div>
-              <button 
-                onClick={onShowCertificate}
-                className="px-6 py-3 bg-white text-amber-600 rounded-xl font-bold text-sm hover:bg-amber-50 transition-all active:scale-95 shadow-sm"
-              >
-                Get Certificate
-              </button>
-            </motion.div>
-          )}
-
           <div className="aspect-video bg-slate-900 rounded-3xl overflow-hidden shadow-xl relative group">
             {embedUrl ? (
               <iframe 

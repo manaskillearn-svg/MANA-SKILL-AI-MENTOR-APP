@@ -11,9 +11,12 @@ export interface UserProfile {
   referredBy?: string;
   completedLessons: string[];
   completedCourses: string[];
+  completedCoursesData?: Record<string, { completedAt: any }>;
   completedTasks: string[];
   unlockedCourses: string[];
   isPremium: boolean;
+  upiId?: string;
+  isBanned?: boolean;
   createdAt: any;
 }
 
@@ -91,4 +94,44 @@ export interface PaymentRequest {
   screenshotUrl: string;
   status: 'pending' | 'approved' | 'rejected';
   timestamp: any;
+}
+
+export interface Announcement {
+  id: string;
+  title: string;
+  message: string;
+  type: 'info' | 'success' | 'warning' | 'error';
+  active: boolean;
+  timestamp: any;
+}
+
+export interface ForumPost {
+  id: string;
+  uid: string;
+  authorName: string;
+  authorPhoto: string;
+  title: string;
+  content: string;
+  category: string;
+  likes: string[]; // Array of UIDs
+  commentCount: number;
+  timestamp: any;
+}
+
+export interface ForumComment {
+  id: string;
+  postId: string;
+  uid: string;
+  authorName: string;
+  authorPhoto: string;
+  content: string;
+  timestamp: any;
+}
+
+export interface PlatformSettings {
+  referralBonus: number;
+  premiumUpgradeBonus: number;
+  minWithdrawal: number;
+  upiId: string;
+  upiName: string;
 }

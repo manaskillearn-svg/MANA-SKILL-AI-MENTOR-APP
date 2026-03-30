@@ -17,6 +17,7 @@
         "completedTasks": { "type": "array", "items": { "type": "string" } },
         "unlockedCourses": { "type": "array", "items": { "type": "string" }, "description": "List of course IDs unlocked by the user" },
         "isPremium": { "type": "boolean" },
+        "isBanned": { "type": "boolean" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "email", "role"]
@@ -109,6 +110,66 @@
         "timestamp": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "amount", "status", "upiId"]
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "Platform-wide announcements",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string", "enum": ["info", "success", "warning"] },
+        "active": { "type": "boolean" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "message", "type"]
+    },
+    "PlatformSettings": {
+      "title": "PlatformSettings",
+      "description": "Global platform configuration",
+      "type": "object",
+      "properties": {
+        "referralBonus": { "type": "number" },
+        "premiumUpgradeBonus": { "type": "number" },
+        "minWithdrawal": { "type": "number" },
+        "upiId": { "type": "string" },
+        "upiName": { "type": "string" }
+      },
+      "required": ["referralBonus", "minWithdrawal"]
+    },
+    "ForumPost": {
+      "title": "ForumPost",
+      "description": "A post in the community forum",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorPhoto": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "category": { "type": "string" },
+        "likes": { "type": "array", "items": { "type": "string" } },
+        "commentCount": { "type": "number" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "authorName", "title", "content", "category"]
+    },
+    "ForumComment": {
+      "title": "ForumComment",
+      "description": "A comment on a forum post",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "postId": { "type": "string" },
+        "uid": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorPhoto": { "type": "string" },
+        "content": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["postId", "uid", "authorName", "content"]
     }
   },
   "firestore": {
@@ -118,6 +179,10 @@
     "/dailyTasks/{taskId}": { "schema": "DailyTask", "description": "Daily tasks catalog" },
     "/earnings/{earningId}": { "schema": "EarningRecord", "description": "Earning history" },
     "/withdrawals/{withdrawalId}": { "schema": "WithdrawalRequest", "description": "Withdrawal requests" },
-    "/payments/{paymentId}": { "schema": "PaymentRequest", "description": "Manual payment requests" }
+    "/payments/{paymentId}": { "schema": "PaymentRequest", "description": "Manual payment requests" },
+    "/announcements/{announcementId}": { "schema": "Announcement", "description": "Platform announcements" },
+    "/platformSettings/{settingId}": { "schema": "PlatformSettings", "description": "Global settings" },
+    "/forumPosts/{postId}": { "schema": "ForumPost", "description": "Community forum posts" },
+    "/forumPosts/{postId}/comments/{commentId}": { "schema": "ForumComment", "description": "Comments on forum posts" }
   }
 }

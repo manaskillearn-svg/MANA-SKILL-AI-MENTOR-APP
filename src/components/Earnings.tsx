@@ -12,16 +12,14 @@ interface EarningsProps {
 
 export default function Earnings({ user, earnings, withdrawals, onRequestWithdrawal }: EarningsProps) {
   const [amount, setAmount] = useState('');
-  const [upiId, setUpiId] = useState('');
   const [showWithdrawForm, setShowWithdrawForm] = useState(false);
 
   const handleWithdraw = (e: React.FormEvent) => {
     e.preventDefault();
     const val = parseFloat(amount);
-    if (val > 0 && val <= user.earnings && upiId.trim()) {
-      onRequestWithdrawal(val, upiId);
+    if (val > 0 && val <= user.earnings && user.upiId) {
+      onRequestWithdrawal(val, user.upiId);
       setAmount('');
-      setUpiId('');
       setShowWithdrawForm(false);
     }
   };
@@ -90,42 +88,56 @@ export default function Earnings({ user, earnings, withdrawals, onRequestWithdra
           animate={{ opacity: 1, y: 0 }}
           className="bg-white p-8 rounded-[2rem] border-2 border-emerald-100 shadow-xl"
         >
-          <h3 className="text-xl font-bold text-slate-900 mb-6 flex items-center">
-            <Smartphone size={24} className="mr-2 text-emerald-500" />
-            Withdraw to UPI
-          </h3>
-          <form onSubmit={handleWithdraw} className="grid md:grid-cols-3 gap-6">
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Amount (₹)</label>
-              <input 
-                type="number" 
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="Min ₹100"
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all"
-                required
-              />
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-bold text-slate-900 flex items-center">
+              <Smartphone size={24} className="mr-2 text-emerald-500" />
+              Withdraw to UPI
+            </h3>
+            {user.upiId && (
+              <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full">
+                Linked: {user.upiId.replace(/(?<=.{2}).(?=.{2})/, '***')}
+              </span>
+            )}
+          </div>
+
+          {!user.upiId ? (
+            <div className="p-6 bg-amber-50 border border-amber-100 rounded-2xl flex items-start space-x-4">
+              <div className="p-2 bg-amber-100 text-amber-600 rounded-xl">
+                <Smartphone size={20} />
+              </div>
+              <div>
+                <h4 className="font-bold text-amber-900">UPI ID Required</h4>
+                <p className="text-sm text-amber-700 mt-1 mb-3">
+                  Please add your UPI ID in the Settings tab before you can withdraw your earnings.
+                </p>
+                <p className="text-xs text-amber-600 font-medium italic">
+                  Go to Profile &gt; Edit Profile &amp; Settings to add your UPI ID.
+                </p>
+              </div>
             </div>
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">UPI ID</label>
-              <input 
-                type="text" 
-                value={upiId}
-                onChange={(e) => setUpiId(e.target.value)}
-                placeholder="example@upi"
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all"
-                required
-              />
-            </div>
-            <div className="flex items-end">
-              <button 
-                type="submit"
-                className="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100"
-              >
-                Submit Request
-              </button>
-            </div>
-          </form>
+          ) : (
+            <form onSubmit={handleWithdraw} className="grid md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Amount (₹)</label>
+                <input 
+                  type="number" 
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="Min ₹100"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all"
+                  required
+                />
+              </div>
+              <div className="flex items-end">
+                <button 
+                  type="submit"
+                  className="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100"
+                >
+                  Submit Request
+                </button>
+              </div>
+            </form>
+          )}
         </motion.div>
       )}
 
@@ -148,7 +160,7 @@ export default function Earnings({ user, earnings, withdrawals, onRequestWithdra
                   <div>
                     <p className="text-sm font-bold text-slate-900">{record.description}</p>
                     <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">
-                      {new Date(record.timestamp?.toDate?.() || record.timestamp).toLocaleDateString()}
+                      {record.timestamp ? new Date(record.timestamp?.toDate?.() || record.timestamp).toLocaleDateString() : 'Just now'}
                     </p>
                   </div>
                 </div>
@@ -172,7 +184,7 @@ export default function Earnings({ user, earnings, withdrawals, onRequestWithdra
             {withdrawals.length > 0 ? withdrawals.map((req) => (
               <div key={req.id} className="p-4 border-b border-slate-50 last:border-0 flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-bold text-slate-900">₹{req.amount} to {req.upiId}</p>
+                  <p className="text-sm font-bold text-slate-900">₹{req.amount} Withdrawal</p>
                   <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">
                     {new Date(req.timestamp?.toDate?.() || req.timestamp).toLocaleDateString()}
                   </p>

@@ -24,6 +24,12 @@ service cloud.firestore {
     //
     // Collection: taskSubmissions
     // Fields: uid, userDisplayName, taskId, taskTitle, proofUrl, status, reward, timestamp
+    //
+    // Collection: forumPosts
+    // Fields: uid, authorName, authorPhoto, title, content, category, likes, commentCount, timestamp
+    //
+    // Collection: forumComments
+    // Fields: postId, uid, authorName, authorPhoto, content, timestamp
     // ===============================================================
 
     // ===============================================================
@@ -33,13 +39,21 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isNotBanned() {
+      return isAuthenticated() && 
+             (isAdmin() || 
+              !exists(/databases/$(database)/documents/users/$(request.auth.uid)) || 
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isBanned', false) != true);
+    }
+
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
     function isAdmin() {
       return isAuthenticated() &&
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+        ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'student') == 'admin') ||
          (request.auth.token.email == "manaskill.earn@gmail.com" && request.auth.token.email_verified == true));
     }
 
@@ -49,11 +63,18 @@ service cloud.firestore {
 
     function isValidUser(data) {
       return data.uid is string && data.email is string &&
+             data.displayName is string && data.photoURL is string &&
              data.role in ['student', 'admin'] &&
              data.earnings is number &&
+             data.referralCode is string &&
+             (!('referredBy' in data) || data.referredBy is string) &&
              data.completedLessons is list &&
+             data.completedCourses is list &&
              data.completedTasks is list &&
-             (!('unlockedCourses' in data) || data.unlockedCourses is list);
+             data.unlockedCourses is list &&
+             data.isPremium is bool &&
+             (!('isBanned' in data) || data.isBanned is bool) &&
+             data.createdAt != null;
     }
 
     function isValidCourse(data) {
@@ -69,15 +90,20 @@ service cloud.firestore {
 
     function isValidEarning(data) {
       return data.uid is string && data.amount is number && data.type in ['referral', 'sale', 'task'] &&
-             (data.uid == request.auth.uid || (data.type == 'referral' && (data.amount == 5 || data.amount == 20)));
+             (data.uid == request.auth.uid || 
+              isAdmin() ||
+              (data.type == 'referral' && (data.amount == 5 || data.amount == 20)));
     }
 
     function isValidWithdrawal(data) {
-      return data.uid is string && data.amount is number && data.status in ['pending', 'successful', 'rejected'] && data.upiId is string;
+      return data.uid is string && data.amount is number && 
+             data.status is string && 
+             data.upiId is string;
     }
 
     function isValidTask(data) {
       return data.title is string && data.title.size() > 0 &&
+             data.description is string &&
              data.reward is number &&
              (!('maxCompletions' in data) || data.maxCompletions is number) &&
              (!('completionCount' in data) || data.completionCount is number);
@@ -89,6 +115,20 @@ service cloud.firestore {
              data.status in ['pending', 'approved', 'rejected'];
     }
 
+    function isValidForumPost(data) {
+      return data.uid is string && data.authorName is string &&
+             data.authorPhoto is string && data.title is string &&
+             data.content is string && data.category is string &&
+             data.likes is list && data.commentCount is number &&
+             data.timestamp != null;
+    }
+
+    function isValidForumComment(data) {
+      return data.postId is string && data.uid is string &&
+             data.authorName is string && data.authorPhoto is string &&
+             data.content is string && data.timestamp != null;
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
@@ -97,10 +137,13 @@ service cloud.firestore {
       // Allow authenticated users to read profiles to find referrers by code
       // Note: In production, consider splitting PII into a private collection
       allow read: if isAuthenticated(); 
-      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == 'student' || isAdmin());
-      allow update: if isAuthenticated() && (
+      allow create: if isNotBanned() && isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == 'student' || isAdmin());
+      allow update: if isNotBanned() && (
         (isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.role == resource.data.role) ||
-        isAdmin()
+        isAdmin() ||
+        // Allow anyone to increment another user's earnings for referral bonuses (₹5)
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['earnings']) &&
+         request.resource.data.earnings == resource.data.earnings + 5)
       );
     }
 
@@ -124,29 +167,62 @@ service cloud.firestore {
     match /earnings/{earningId} {
       allow read: if isAuthenticated() && (request.auth.uid == resource.data.uid || isAdmin());
       // Allow creating referral earnings for others
-      allow create: if isAuthenticated() && isValidEarning(request.resource.data);
+      allow create: if isNotBanned() && isValidEarning(request.resource.data);
       allow update, delete: if isAdmin();
     }
 
     match /withdrawals/{withdrawalId} {
       allow read: if isAuthenticated() && (request.auth.uid == resource.data.uid || isAdmin());
-      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.uid && isValidWithdrawal(request.resource.data) && request.resource.data.status == 'pending';
+      allow create: if isNotBanned() && request.auth.uid == request.resource.data.uid && isValidWithdrawal(request.resource.data) && request.resource.data.status == 'pending';
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /taskSubmissions/{submissionId} {
       allow read: if isAuthenticated() && (request.auth.uid == resource.data.uid || isAdmin());
-      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.uid && request.resource.data.status == 'pending';
+      allow create: if isNotBanned() && request.auth.uid == request.resource.data.uid && request.resource.data.status == 'pending';
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /payments/{paymentId} {
       allow read: if isAuthenticated() && (request.auth.uid == resource.data.uid || isAdmin());
-      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.uid && isValidPayment(request.resource.data) && request.resource.data.status == 'pending';
+      allow create: if isNotBanned() && request.auth.uid == request.resource.data.uid && isValidPayment(request.resource.data) && request.resource.data.status == 'pending';
       allow update: if isAdmin();
       allow delete: if isAdmin();
+    }
+
+    match /announcements/{announcementId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /platformSettings/{settingId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /forumPosts/{postId} {
+      allow read: if isAuthenticated();
+      allow create: if isNotBanned() && request.auth.uid == request.resource.data.uid && isValidForumPost(request.resource.data);
+      allow update: if isNotBanned() && (
+        (request.auth.uid == resource.data.uid && isValidForumPost(request.resource.data) && request.resource.data.uid == resource.data.uid) ||
+        isAdmin() ||
+        // Allow anyone to update likes and commentCount (with validation)
+        (request.resource.data.diff(resource.data).affectedKeys().hasAny(['likes', 'commentCount']) &&
+         request.resource.data.uid == resource.data.uid &&
+         request.resource.data.authorName == resource.data.authorName &&
+         request.resource.data.title == resource.data.title &&
+         request.resource.data.content == resource.data.content)
+      );
+      allow delete: if isAdmin() || (isAuthenticated() && request.auth.uid == resource.data.uid);
+
+      match /comments/{commentId} {
+        allow read: if isAuthenticated();
+        allow create: if isNotBanned() && request.auth.uid == request.resource.data.uid && isValidForumComment(request.resource.data);
+        allow update: if isNotBanned() && (request.auth.uid == resource.data.uid || isAdmin()) && isValidForumComment(request.resource.data);
+        allow delete: if isAdmin() || (isAuthenticated() && request.auth.uid == resource.data.uid);
+      }
     }
     
     match /test/connection {

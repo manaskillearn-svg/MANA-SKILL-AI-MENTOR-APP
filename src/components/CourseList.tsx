@@ -12,7 +12,14 @@ interface CourseListProps {
   onManageLessons?: (courseId: string) => void;
 }
 
-export default function CourseList({ courses, user, payments, onSelectCourse, onPurchaseCourse, onManageLessons }: CourseListProps) {
+export default function CourseList({ 
+  courses = [], 
+  user, 
+  payments = [], 
+  onSelectCourse, 
+  onPurchaseCourse, 
+  onManageLessons 
+}: CourseListProps) {
   const getCourseStatus = (courseId: string) => {
     if (user.unlockedCourses && user.unlockedCourses.includes(courseId)) return 'unlocked';
     const pendingPayment = payments.find(p => p.courseId === courseId && p.status === 'pending');

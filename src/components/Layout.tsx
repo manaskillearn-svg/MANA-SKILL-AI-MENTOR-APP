@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Home, BookOpen, MessageSquare, Wallet, User, LogOut, ShieldCheck } from 'lucide-react';
+import { Home, BookOpen, MessageSquare, Wallet, User, LogOut, ShieldCheck, Settings, Trophy, Users } from 'lucide-react';
 import { UserProfile } from '../types';
 
 interface LayoutProps {

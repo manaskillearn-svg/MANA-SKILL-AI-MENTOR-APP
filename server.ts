@@ -1,7 +1,7 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
-import app from "./src/server/app";
+import app from "./src/server/app.ts";
 
 async function startServer() {
   const PORT = 3000;
