@@ -134,4 +134,5 @@ export interface PlatformSettings {
   minWithdrawal: number;
   upiId: string;
   upiName: string;
+  maintenanceMode?: boolean;
 }

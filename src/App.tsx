@@ -299,7 +299,8 @@ export default function App() {
           premiumUpgradeBonus: 20,
           minWithdrawal: 100,
           upiId: '',
-          upiName: ''
+          upiName: '',
+          maintenanceMode: false
         };
         setDoc(doc(db, 'platformSettings', 'global'), defaultSettings);
       }
@@ -867,6 +868,36 @@ export default function App() {
         <p className="mt-8 text-[10px] text-slate-500 max-w-xs">
           If this takes too long, please check your internet connection or refresh the page.
         </p>
+      </div>
+    );
+  }
+
+  // Maintenance Mode Check
+  if (platformSettings?.maintenanceMode && user?.role !== 'admin') {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="max-w-md space-y-6"
+        >
+          <div className="w-20 h-20 bg-amber-500/10 rounded-3xl flex items-center justify-center mx-auto border border-amber-500/20">
+            <Settings className="w-10 h-10 text-amber-500 animate-spin-slow" />
+          </div>
+          <h1 className="text-3xl font-bold text-white tracking-tight">Under Maintenance</h1>
+          <p className="text-slate-400 leading-relaxed">
+            We're currently performing some scheduled maintenance to improve your experience. 
+            We'll be back online shortly. Thank you for your patience!
+          </p>
+          <div className="pt-4">
+            <button 
+              onClick={handleLogout}
+              className="text-sm font-bold text-slate-500 hover:text-white transition-colors"
+            >
+              Sign Out
+            </button>
+          </div>
+        </motion.div>
       </div>
     );
   }
